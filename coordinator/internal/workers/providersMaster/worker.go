@@ -61,8 +61,11 @@ const (
 	defaultEndpointFullRefreshInterval     = 6 * time.Hour
 	defaultEndpointFullRefreshFailInterval = 30 * time.Second
 
-	defaultStoreProofInterval   = 60 * time.Minute
-	storeProofFailureInterval   = 15 * time.Second
+	defaultStoreProofInterval = 60 * time.Minute
+	storeProofFailureInterval = 15 * time.Second
+
+	defaultProviderIPRefreshInterval = 15 * time.Minute
+	providerIPRefreshFailInterval    = 30 * time.Second
 )
 
 type providers interface {
@@ -74,6 +77,7 @@ type providers interface {
 	UpdateRejectedStorageContracts(ctx context.Context, storageContracts []db.ContractToProviderRelation) (err error)
 	AddProviders(ctx context.Context, providers []db.ProviderCreate) (err error)
 	UpdateProvidersIPs(ctx context.Context, ips []db.ProviderIP) (err error)
+	UpdateProviderADIPs(ctx context.Context, ips []db.ProviderIP) (err error)
 	UpdateProviders(ctx context.Context, providers []db.ProviderUpdate) (err error)
 	AddStatuses(ctx context.Context, providers []db.ProviderStatusUpdate) (err error)
 	UpdateContractProofsChecks(ctx context.Context, contractsProofs []db.ContractProofsCheck) (err error)
@@ -130,6 +134,10 @@ type StoreProofConfig struct {
 	RetryDelay time.Duration
 }
 
+type ProviderIPRefreshConfig struct {
+	Interval time.Duration
+}
+
 type providersMasterWorker struct {
 	providers      providers
 	system         system
@@ -144,6 +152,7 @@ type providersMasterWorker struct {
 	timeouts       RunChecksTimeouts
 	endpointCfg    EndpointRefreshConfig
 	storeProofCfg  StoreProofConfig
+	providerIPCfg  ProviderIPRefreshConfig
 	logger         *slog.Logger
 	lastIPsMu      sync.RWMutex
 	lastKnownIPs   map[string]db.ProviderIP
@@ -161,6 +170,7 @@ type Worker interface {
 	UpdateRating(ctx context.Context) (interval time.Duration, err error)
 	UpdateIPInfo(ctx context.Context) (interval time.Duration, err error)
 	RefreshEndpointsFull(ctx context.Context) (interval time.Duration, err error)
+	RefreshProviderIPs(ctx context.Context) (interval time.Duration, err error)
 }
 
 func (w *providersMasterWorker) CollectNewProviders(ctx context.Context) (interval time.Duration, err error) {
@@ -1721,6 +1731,7 @@ func NewWorker(
 	timeouts RunChecksTimeouts,
 	endpointCfg EndpointRefreshConfig,
 	storeProofCfg StoreProofConfig,
+	providerIPCfg ProviderIPRefreshConfig,
 	logger *slog.Logger,
 ) Worker {
 	_, prv, err := ed25519.GenerateKey(nil)
@@ -1741,6 +1752,11 @@ func NewWorker(
 	if storeProofCfg.Interval <= 0 {
 		storeProofCfg.Interval = defaultStoreProofInterval
 	}
+	if providerIPCfg.Interval <= 0 {
+		providerIPCfg.Interval = defaultProviderIPRefreshInterval
+	}
+
+	initProviderIPRefreshMetrics()
 
 	return &providersMasterWorker{
 		providers:            providers,
@@ -1756,6 +1772,7 @@ func NewWorker(
 		timeouts:             timeouts,
 		endpointCfg:          endpointCfg,
 		storeProofCfg:        storeProofCfg,
+		providerIPCfg:        providerIPCfg,
 		logger:               logger,
 		lastKnownIPs:         make(map[string]db.ProviderIP),
 		providerAgentSuccess: make(map[string]string),

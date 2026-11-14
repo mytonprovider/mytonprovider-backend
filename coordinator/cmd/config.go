@@ -16,18 +16,19 @@ var logLevels = map[uint8]slog.Level{
 }
 
 type System struct {
-	Port             string             `env:"SYSTEM_PORT" envDefault:"9090"`
-	ADNLPort         string             `env:"SYSTEM_ADNL_PORT" envDefault:"16167"`
-	AccessTokens     string             `env:"SYSTEM_ACCESS_TOKENS" envDefault:""`
-	Key              ed25519.PrivateKey `env:"SYSTEM_KEY" required:"false"`
-	LogLevel         uint8              `env:"SYSTEM_LOG_LEVEL" envDefault:"1"` // 0 - debug, 1 - info, 2 - warn, 3 - error
-	StoreHistoryDays int                `env:"SYSTEM_STORE_HISTORY_DAYS" envDefault:"90"`
-	EndpointStaleTTLMinutes            int `env:"COORDINATOR_ENDPOINT_STALE_TTL_MINUTES" envDefault:"720"`
-	EndpointFullRefreshIntervalMinutes int `env:"COORDINATOR_ENDPOINT_FULL_REFRESH_INTERVAL_MINUTES" envDefault:"360"`
-	EndpointRefreshFailureSeconds      int `env:"COORDINATOR_ENDPOINT_REFRESH_FAILURE_INTERVAL_SECONDS" envDefault:"30"`
-	StoreProofIntervalMinutes          int `env:"COORDINATOR_STOREPROOF_INTERVAL_MINUTES" envDefault:"60"`
-	StoreProofRetryDelayMinutes        int `env:"COORDINATOR_STOREPROOF_RETRY_DELAY_MINUTES" envDefault:"15"`
-	CORSAllowedOrigins                 string `env:"CORS_ALLOWED_ORIGINS" envDefault:""`
+	Port                               string             `env:"SYSTEM_PORT" envDefault:"9090"`
+	ADNLPort                           string             `env:"SYSTEM_ADNL_PORT" envDefault:"16167"`
+	AccessTokens                       string             `env:"SYSTEM_ACCESS_TOKENS" envDefault:""`
+	Key                                ed25519.PrivateKey `env:"SYSTEM_KEY" required:"false"`
+	LogLevel                           uint8              `env:"SYSTEM_LOG_LEVEL" envDefault:"1"` // 0 - debug, 1 - info, 2 - warn, 3 - error
+	StoreHistoryDays                   int                `env:"SYSTEM_STORE_HISTORY_DAYS" envDefault:"90"`
+	EndpointStaleTTLMinutes            int                `env:"COORDINATOR_ENDPOINT_STALE_TTL_MINUTES" envDefault:"720"`
+	EndpointFullRefreshIntervalMinutes int                `env:"COORDINATOR_ENDPOINT_FULL_REFRESH_INTERVAL_MINUTES" envDefault:"360"`
+	EndpointRefreshFailureSeconds      int                `env:"COORDINATOR_ENDPOINT_REFRESH_FAILURE_INTERVAL_SECONDS" envDefault:"30"`
+	ProviderIPRefreshIntervalMinutes   int                `env:"COORDINATOR_PROVIDER_IP_REFRESH_INTERVAL_MINUTES" envDefault:"15"`
+	StoreProofIntervalMinutes          int                `env:"COORDINATOR_STOREPROOF_INTERVAL_MINUTES" envDefault:"60"`
+	StoreProofRetryDelayMinutes        int                `env:"COORDINATOR_STOREPROOF_RETRY_DELAY_MINUTES" envDefault:"15"`
+	CORSAllowedOrigins                 string             `env:"CORS_ALLOWED_ORIGINS" envDefault:""`
 }
 
 type Metrics struct {

@@ -126,6 +126,17 @@ func (m *metricsMiddleware) UpdateProvidersIPs(ctx context.Context, ips []db.Pro
 	return m.repo.UpdateProvidersIPs(ctx, ips)
 }
 
+func (m *metricsMiddleware) UpdateProviderADIPs(ctx context.Context, ips []db.ProviderIP) (err error) {
+	defer func(s time.Time) {
+		labels := []string{
+			"UpdateProviderADIPs", strconv.FormatBool(err != nil),
+		}
+		m.reqCount.WithLabelValues(labels...).Add(1)
+		m.reqDuration.WithLabelValues(labels...).Observe(time.Since(s).Seconds())
+	}(time.Now())
+	return m.repo.UpdateProviderADIPs(ctx, ips)
+}
+
 func (m *metricsMiddleware) UpdateUptime(ctx context.Context) (err error) {
 	defer func(s time.Time) {
 		labels := []string{

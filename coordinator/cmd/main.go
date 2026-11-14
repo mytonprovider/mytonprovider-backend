@@ -187,6 +187,9 @@ func run() (err error) {
 			Interval:   time.Duration(config.System.StoreProofIntervalMinutes) * time.Minute,
 			RetryDelay: time.Duration(config.System.StoreProofRetryDelayMinutes) * time.Minute,
 		},
+		providersmaster.ProviderIPRefreshConfig{
+			Interval: time.Duration(config.System.ProviderIPRefreshIntervalMinutes) * time.Minute,
+		},
 		logger,
 	)
 	providersMasterWorker = providersmaster.NewMetrics(workersRunCount, workersRunDuration, providersMasterWorker)

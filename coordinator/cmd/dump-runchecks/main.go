@@ -145,6 +145,7 @@ func run() error {
 				},
 				providersmaster.EndpointRefreshConfig{},
 				providersmaster.StoreProofConfig{},
+				providersmaster.ProviderIPRefreshConfig{},
 				logger,
 			)
 			if worker == nil {

@@ -189,6 +189,10 @@ func (r *Repository) UpdateProvidersIPs(_ context.Context, _ []db.ProviderIP) er
 	return nil
 }
 
+func (r *Repository) UpdateProviderADIPs(_ context.Context, _ []db.ProviderIP) error {
+	return nil
+}
+
 func (r *Repository) UpdateProviders(_ context.Context, _ []db.ProviderUpdate) error {
 	return nil
 }

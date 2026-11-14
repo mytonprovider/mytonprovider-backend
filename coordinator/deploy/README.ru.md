@@ -131,6 +131,14 @@ retryWindow ≈ INTERVAL - mainDuration - RETRY_DELAY - 5m
 
 Поведение записи в БД: успехи и «мёртвые» ошибки пишутся сразу; транзиентные fail’ы откладываются до ретрая (или коммитятся, если ретрай скипнут/`RETRY_DELAY=0`). Pipeline events пишутся сразу честно для отладки.
 
+### Проверка IP провайдера
+
+`RefreshProviderIPs` резолвит ADNL-адрес каждого провайдера в DHT и пишет `providers.ip` и `port`. Storage-эндпоинт остаётся на `StoreProof` и `RefreshEndpointsFull`. Промах DHT не затирает уже записанный IP.
+
+| Переменная | Дефолт | Смысл |
+|------------|--------|--------|
+| `COORDINATOR_PROVIDER_IP_REFRESH_INTERVAL_MINUTES` | `15` | Пауза после успешного прохода |
+
 ### Секреты
 
 См. [secrets/README.ru.md](secrets/README.ru.md):

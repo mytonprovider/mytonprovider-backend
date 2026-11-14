@@ -113,6 +113,14 @@ If the main pass finishes earlier than 20m, delay starts earlier and the retry w
 
 DB write policy: successes and non-retriable errors are written immediately; transient fails are deferred until retry (or committed if retry is skipped / `RETRY_DELAY=0`). Pipeline events are recorded immediately for debugging.
 
+### Provider IP refresh
+
+`RefreshProviderIPs` resolves each provider ADNL address in DHT and writes `providers.ip` and `port`. Storage endpoints stay on `StoreProof` and `RefreshEndpointsFull`. A DHT miss keeps the previous IP.
+
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `COORDINATOR_PROVIDER_IP_REFRESH_INTERVAL_MINUTES` | `15` | Pause after a successful pass |
+
 ### Secrets
 
 See [secrets/README.md](secrets/README.md). Issue certs on the coordinator host; full steps in [agent/README.md](../../agent/README.md).

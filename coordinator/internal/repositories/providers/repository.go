@@ -22,6 +22,7 @@ type Repository interface {
 	UpdateBenchmarks(ctx context.Context, benchmarks []db.BenchmarkUpdate) (err error)
 	AddStatuses(ctx context.Context, providers []db.ProviderStatusUpdate) (err error)
 	UpdateProvidersIPs(ctx context.Context, ips []db.ProviderIP) (err error)
+	UpdateProviderADIPs(ctx context.Context, ips []db.ProviderIP) (err error)
 	UpdateUptime(ctx context.Context) (err error)
 	UpdateRating(ctx context.Context) (err error)
 	GetAllProvidersPubkeys(ctx context.Context) (pubkeys []string, err error)
@@ -495,6 +496,37 @@ func (r *repository) UpdateProvidersIPs(ctx context.Context, ips []db.ProviderIP
 		}
 
 		return fmt.Errorf("failed to update providers IPs: %w", err)
+	}
+
+	return nil
+}
+
+func (r *repository) UpdateProviderADIPs(ctx context.Context, ips []db.ProviderIP) (err error) {
+	if len(ips) == 0 {
+		return nil
+	}
+
+	query := `
+		UPDATE providers.providers p
+		SET
+			ip = j.provider_ip,
+			port = CASE WHEN j.provider_port > 0 THEN j.provider_port ELSE p.port END
+		FROM (
+			SELECT
+				lower(s->>'public_key') AS public_key,
+				s->'provider'->>'ip' AS provider_ip,
+				(s->'provider'->>'port')::int AS provider_port
+			FROM jsonb_array_elements($1::jsonb) AS s
+		) AS j
+		WHERE lower(p.public_key) = j.public_key
+			AND length(j.provider_ip) > 0
+	`
+	_, err = r.db.Exec(ctx, query, ips)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil
+		}
+		return fmt.Errorf("failed to update provider ADNL IPs: %w", err)
 	}
 
 	return nil

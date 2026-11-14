@@ -48,6 +48,10 @@ func (f *fakeProvidersRepo) UpdateProvidersIPs(context.Context, []db.ProviderIP)
 	return nil
 }
 
+func (f *fakeProvidersRepo) UpdateProviderADIPs(context.Context, []db.ProviderIP) error {
+	return nil
+}
+
 func (f *fakeProvidersRepo) UpdateProviders(context.Context, []db.ProviderUpdate) error {
 	return nil
 }
@@ -212,4 +216,3 @@ func TestUpdateRejectedContracts_ClosesMissingProviderRelation(t *testing.T) {
 		t.Fatalf("expected 1 closed contract, got %d", len(repo.closed))
 	}
 }
-
