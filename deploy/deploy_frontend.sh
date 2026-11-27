@@ -53,7 +53,7 @@ Usage:
   PUBLIC_ORIGIN=https://front.example.com \
   INSTALL_SSL=true \
   COORDINATOR_PORT=8080 \
-  bash coordinator/deploy/deploy_frontend.sh
+  bash deploy/deploy_frontend.sh
 EOF
 }
 

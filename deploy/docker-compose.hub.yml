@@ -1,4 +1,4 @@
-name: mytonprovider-coordinator
+name: mytonprovider-backend
 
 services:
   postgres:

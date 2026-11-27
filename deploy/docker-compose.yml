@@ -1,4 +1,4 @@
-name: mytonprovider-coordinator
+name: mytonprovider-backend
 
 services:
   postgres:
@@ -16,8 +16,8 @@ services:
 
   coordinator:
     build:
-      context: ../..
-      dockerfile: coordinator/Dockerfile
+      context: ..
+      dockerfile: Dockerfile
     restart: unless-stopped
     env_file:
       - .env
