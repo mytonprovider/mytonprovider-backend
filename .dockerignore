@@ -6,9 +6,7 @@
 **/*.log
 
 # Test artifacts / local reports
-agent/tests/
 coordinator/tmp/
-observability/prometheus-grafana/data/
 
 # Local env / secrets
 **/.env
