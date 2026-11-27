@@ -3,8 +3,8 @@ package pipelineevents
 import (
 	"testing"
 
-	"mytonprovider-coordinator/internal/constants"
-	"mytonprovider-coordinator/internal/models/db"
+	"mytonprovider-backend/internal/constants"
+	"mytonprovider-backend/internal/models/db"
 )
 
 func TestRecordBagTransition(t *testing.T) {

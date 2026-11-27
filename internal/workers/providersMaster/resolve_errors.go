@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"mytonprovider-coordinator/internal/pipelineevents"
+	"mytonprovider-backend/internal/pipelineevents"
 )
 
 type resolveStageError struct {

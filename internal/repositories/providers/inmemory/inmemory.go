@@ -5,7 +5,7 @@ import (
 	"strings"
 	"sync"
 
-	"mytonprovider-coordinator/internal/models/db"
+	"mytonprovider-backend/internal/models/db"
 )
 
 // Repository is a minimal in-memory stand-in for providers.Repository, sufficient for

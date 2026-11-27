@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"mytonprovider-coordinator/internal/cache"
-	v1 "mytonprovider-coordinator/internal/models/api/v1"
-	"mytonprovider-coordinator/internal/utils"
+	"mytonprovider-backend/internal/cache"
+	v1 "mytonprovider-backend/internal/models/api/v1"
+	"mytonprovider-backend/internal/utils"
 )
 
 const (

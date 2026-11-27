@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"strings"
 
-	"mytonprovider-coordinator/internal/constants"
-	"mytonprovider-coordinator/internal/models/db"
+	"mytonprovider-backend/internal/constants"
+	"mytonprovider-backend/internal/models/db"
 )
 
 const maxErrorMessageLen = 1024

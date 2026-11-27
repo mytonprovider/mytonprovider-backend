@@ -3,7 +3,7 @@ package httpServer
 import (
 	"github.com/gofiber/fiber/v2"
 
-	"mytonprovider-coordinator/internal/models"
+	"mytonprovider-backend/internal/models"
 )
 
 func requestSourceIP(c *fiber.Ctx) string {

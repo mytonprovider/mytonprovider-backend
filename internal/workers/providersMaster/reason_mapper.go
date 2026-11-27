@@ -2,7 +2,7 @@ package providersmaster
 
 import (
 	providerchecksv1 "github.com/mytonprovider/mytonprovider-agent/contracts/gen/go/providerchecks/v1"
-	"mytonprovider-coordinator/internal/constants"
+	"mytonprovider-backend/internal/constants"
 )
 
 func reasonFromProto(code providerchecksv1.ReasonCode) constants.ReasonCode {

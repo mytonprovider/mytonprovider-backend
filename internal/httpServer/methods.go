@@ -8,7 +8,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	v1 "mytonprovider-coordinator/internal/models/api/v1"
+	v1 "mytonprovider-backend/internal/models/api/v1"
 )
 
 func (h *handler) limitReached(c *fiber.Ctx) error {

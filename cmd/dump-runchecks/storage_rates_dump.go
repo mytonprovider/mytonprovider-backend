@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	providersmaster "mytonprovider-coordinator/internal/workers/providersMaster"
+	providersmaster "mytonprovider-backend/internal/workers/providersMaster"
 )
 
 // storageRatesDumpConfig is non-nil only when --also-dump-storage-rates is set.

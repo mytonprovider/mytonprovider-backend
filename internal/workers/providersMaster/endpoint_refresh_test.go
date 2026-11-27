@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"mytonprovider-coordinator/internal/models/db"
+	"mytonprovider-backend/internal/models/db"
 )
 
 func TestIsEndpointStateStale(t *testing.T) {

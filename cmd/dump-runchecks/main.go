@@ -12,13 +12,13 @@ import (
 	"strings"
 	"time"
 
-	"mytonprovider-coordinator/internal/clients/ifconfig"
-	tonclient "mytonprovider-coordinator/internal/clients/ton"
-	providersRepository "mytonprovider-coordinator/internal/repositories/providers"
-	providersinmemory "mytonprovider-coordinator/internal/repositories/providers/inmemory"
-	systemRepository "mytonprovider-coordinator/internal/repositories/system"
-	systeminmemory "mytonprovider-coordinator/internal/repositories/system/inmemory"
-	providersmaster "mytonprovider-coordinator/internal/workers/providersMaster"
+	"mytonprovider-backend/internal/clients/ifconfig"
+	tonclient "mytonprovider-backend/internal/clients/ton"
+	providersRepository "mytonprovider-backend/internal/repositories/providers"
+	providersinmemory "mytonprovider-backend/internal/repositories/providers/inmemory"
+	systemRepository "mytonprovider-backend/internal/repositories/system"
+	systeminmemory "mytonprovider-backend/internal/repositories/system/inmemory"
+	providersmaster "mytonprovider-backend/internal/workers/providersMaster"
 
 	"github.com/xssnick/tonutils-go/address"
 )

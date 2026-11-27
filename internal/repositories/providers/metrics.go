@@ -7,7 +7,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
-	"mytonprovider-coordinator/internal/models/db"
+	"mytonprovider-backend/internal/models/db"
 )
 
 type metricsMiddleware struct {

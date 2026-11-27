@@ -9,9 +9,9 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
-	"mytonprovider-coordinator/internal/cache"
-	v1 "mytonprovider-coordinator/internal/models/api/v1"
-	"mytonprovider-coordinator/internal/models/db"
+	"mytonprovider-backend/internal/cache"
+	v1 "mytonprovider-backend/internal/models/api/v1"
+	"mytonprovider-backend/internal/models/db"
 )
 
 type providers interface {

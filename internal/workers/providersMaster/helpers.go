@@ -8,9 +8,9 @@ import (
 
 	"github.com/xssnick/tonutils-go/tlb"
 
-	tonclient "mytonprovider-coordinator/internal/clients/ton"
-	"mytonprovider-coordinator/internal/constants"
-	"mytonprovider-coordinator/internal/models/db"
+	tonclient "mytonprovider-backend/internal/clients/ton"
+	"mytonprovider-backend/internal/constants"
+	"mytonprovider-backend/internal/models/db"
 )
 
 func fillStatuses(bagsStatuses *sync.Map, contracts []db.ContractToProviderRelation, reason constants.ReasonCode) {

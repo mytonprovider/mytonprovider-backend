@@ -5,9 +5,9 @@ import (
 	"log/slog"
 	"time"
 
-	"mytonprovider-coordinator/internal/workers/cleaner"
-	providersmaster "mytonprovider-coordinator/internal/workers/providersMaster"
-	"mytonprovider-coordinator/internal/workers/telemetry"
+	"mytonprovider-backend/internal/workers/cleaner"
+	providersmaster "mytonprovider-backend/internal/workers/providersMaster"
+	"mytonprovider-backend/internal/workers/telemetry"
 )
 
 type workerFunc = func(ctx context.Context) (interval time.Duration, err error)

@@ -7,11 +7,11 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"mytonprovider-coordinator/internal/constants"
-	"mytonprovider-coordinator/internal/models"
-	v1 "mytonprovider-coordinator/internal/models/api/v1"
-	"mytonprovider-coordinator/internal/models/db"
-	"mytonprovider-coordinator/internal/utils"
+	"mytonprovider-backend/internal/constants"
+	"mytonprovider-backend/internal/models"
+	v1 "mytonprovider-backend/internal/models/api/v1"
+	"mytonprovider-backend/internal/models/db"
+	"mytonprovider-backend/internal/utils"
 )
 
 const (

@@ -4,7 +4,7 @@ import (
 	"crypto/ed25519"
 	"time"
 
-	"mytonprovider-coordinator/internal/constants"
+	"mytonprovider-backend/internal/constants"
 )
 
 type ProviderUpdate struct {

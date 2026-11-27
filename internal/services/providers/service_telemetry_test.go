@@ -7,9 +7,9 @@ import (
 	"log/slog"
 	"testing"
 
-	"mytonprovider-coordinator/internal/models"
-	v1 "mytonprovider-coordinator/internal/models/api/v1"
-	"mytonprovider-coordinator/internal/models/db"
+	"mytonprovider-backend/internal/models"
+	v1 "mytonprovider-backend/internal/models/api/v1"
+	"mytonprovider-backend/internal/models/db"
 )
 
 type fakeProvidersRepo struct {

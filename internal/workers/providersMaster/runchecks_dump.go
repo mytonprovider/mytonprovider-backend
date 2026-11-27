@@ -14,7 +14,7 @@ import (
 	"github.com/xssnick/tonutils-go/adnl/dht"
 	"github.com/xssnick/tonutils-storage-provider/pkg/transport"
 
-	"mytonprovider-coordinator/internal/models/db"
+	"mytonprovider-backend/internal/models/db"
 )
 
 var (

@@ -5,7 +5,7 @@ import (
 	"crypto/ed25519"
 	"testing"
 
-	"mytonprovider-coordinator/internal/models/db"
+	"mytonprovider-backend/internal/models/db"
 )
 
 func overlayTestKey(b byte) ed25519.PublicKey {

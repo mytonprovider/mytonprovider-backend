@@ -15,7 +15,7 @@ import (
 	"github.com/xssnick/tonutils-go/ton"
 	pContract "github.com/xssnick/tonutils-storage-provider/pkg/contract"
 
-	"mytonprovider-coordinator/internal/utils"
+	"mytonprovider-backend/internal/utils"
 )
 
 const (

@@ -3,9 +3,9 @@ package providersmaster
 import (
 	"testing"
 
-	"mytonprovider-coordinator/internal/constants"
-	"mytonprovider-coordinator/internal/models/db"
-	"mytonprovider-coordinator/internal/pipelineevents"
+	"mytonprovider-backend/internal/constants"
+	"mytonprovider-backend/internal/models/db"
+	"mytonprovider-backend/internal/pipelineevents"
 )
 
 func TestIsRetriableReason(t *testing.T) {

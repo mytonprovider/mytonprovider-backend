@@ -4,9 +4,9 @@ import (
 	"testing"
 
 	providerchecksv1 "github.com/mytonprovider/mytonprovider-agent/contracts/gen/go/providerchecks/v1"
-	"mytonprovider-coordinator/internal/clients/agentrpc"
-	"mytonprovider-coordinator/internal/constants"
-	"mytonprovider-coordinator/internal/models/db"
+	"mytonprovider-backend/internal/clients/agentrpc"
+	"mytonprovider-backend/internal/constants"
+	"mytonprovider-backend/internal/models/db"
 )
 
 func TestMergeRunChecksResponses_PrefersValidProof(t *testing.T) {

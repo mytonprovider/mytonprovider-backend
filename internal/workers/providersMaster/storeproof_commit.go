@@ -3,9 +3,9 @@ package providersmaster
 import (
 	"time"
 
-	"mytonprovider-coordinator/internal/constants"
-	"mytonprovider-coordinator/internal/models/db"
-	"mytonprovider-coordinator/internal/pipelineevents"
+	"mytonprovider-backend/internal/constants"
+	"mytonprovider-backend/internal/models/db"
+	"mytonprovider-backend/internal/pipelineevents"
 )
 
 const storeProofRetryBuffer = 5 * time.Minute

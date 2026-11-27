@@ -1,4 +1,4 @@
-module mytonprovider-coordinator
+module mytonprovider-backend
 
 go 1.26.2
 

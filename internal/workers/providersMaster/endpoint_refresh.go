@@ -11,8 +11,8 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
-	"mytonprovider-coordinator/internal/models/db"
-	"mytonprovider-coordinator/internal/pipelineevents"
+	"mytonprovider-backend/internal/models/db"
+	"mytonprovider-backend/internal/pipelineevents"
 )
 
 var (

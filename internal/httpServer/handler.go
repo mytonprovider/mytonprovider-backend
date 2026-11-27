@@ -9,7 +9,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	v1 "mytonprovider-coordinator/internal/models/api/v1"
+	v1 "mytonprovider-backend/internal/models/api/v1"
 )
 
 type providers interface {

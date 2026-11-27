@@ -29,14 +29,14 @@ import (
 	"github.com/xssnick/tonutils-storage-provider/pkg/transport"
 
 	providerchecksv1 "github.com/mytonprovider/mytonprovider-agent/contracts/gen/go/providerchecks/v1"
-	"mytonprovider-coordinator/internal/clients/agentrpc"
-	"mytonprovider-coordinator/internal/clients/ifconfig"
-	tonclient "mytonprovider-coordinator/internal/clients/ton"
-	"mytonprovider-coordinator/internal/constants"
-	"mytonprovider-coordinator/internal/models/db"
-	"mytonprovider-coordinator/internal/pipelineevents"
-	"mytonprovider-coordinator/internal/tonstorage"
-	"mytonprovider-coordinator/internal/utils"
+	"mytonprovider-backend/internal/clients/agentrpc"
+	"mytonprovider-backend/internal/clients/ifconfig"
+	tonclient "mytonprovider-backend/internal/clients/ton"
+	"mytonprovider-backend/internal/constants"
+	"mytonprovider-backend/internal/models/db"
+	"mytonprovider-backend/internal/pipelineevents"
+	"mytonprovider-backend/internal/tonstorage"
+	"mytonprovider-backend/internal/utils"
 )
 
 const (

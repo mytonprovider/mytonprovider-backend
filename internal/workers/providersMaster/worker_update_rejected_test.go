@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	tonclient "mytonprovider-coordinator/internal/clients/ton"
-	"mytonprovider-coordinator/internal/models/db"
+	tonclient "mytonprovider-backend/internal/clients/ton"
+	"mytonprovider-backend/internal/models/db"
 )
 
 type fakeProvidersRepo struct {
