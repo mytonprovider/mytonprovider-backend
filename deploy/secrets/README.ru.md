@@ -2,7 +2,7 @@
 
 **[English version](README.md)**
 
-Положите секреты coordinator сюда перед `task coordinator:deploy:up`.
+Положите секреты coordinator сюда перед `task deploy:up`.
 
 ## Файлы
 
@@ -20,7 +20,7 @@
 Проверка после старта coordinator:
 
 ```bash
-RAW=$(tr -d '\n' < coordinator/deploy/secrets/metrics.token)
+RAW=$(tr -d '\n' < deploy/secrets/metrics.token)
 curl -fsS -H "Authorization: Bearer ${RAW}" http://127.0.0.1:8080/metrics | head -1
 ```
 
@@ -28,7 +28,7 @@ curl -fsS -H "Authorization: Bearer ${RAW}" http://127.0.0.1:8080/metrics | head
 
 ## Связь с агентами
 
-- `AGENT_AUTH_TOKEN` в `.env` coordinator = `AGENT_AUTH_TOKEN` в `agent/deploy/.env.hub` на **каждом** агенте (отдельно от metrics/API токенов).
+- `AGENT_AUTH_TOKEN` в `.env` coordinator = `AGENT_AUTH_TOKEN` в `deploy/.env.hub` на **каждом** агенте (отдельно от metrics/API токенов).
 - `agents-ca.crt` **не** копируется на агенты. На агенты идут только `server.crt` + `server.key` (подписаны этой CA).
 
-Выпуск CA и сертификатов: [agent/README.ru.md](../../../agent/README.ru.md).
+Выпуск CA и сертификатов: [mytonprovider-agent](https://github.com/mytonprovider/mytonprovider-agent).

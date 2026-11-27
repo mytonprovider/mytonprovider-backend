@@ -9,7 +9,7 @@
 1. Выполнить SQL **до** деплоя coordinator с новой формулой рейтинга. Миграции при старте не запускаются. `CREATE OR REPLACE` не меняет тип возврата, поэтому функция сначала удаляется:
 
 ```bash
-psql -h <host> -U pguser -d providerdb -f coordinator/db/migrations/002_parse_speed_bigint.up.sql
+psql -h <host> -U pguser -d providerdb -f db/migrations/002_parse_speed_bigint.up.sql
 ```
 
 2. Проверить функцию:
@@ -28,7 +28,7 @@ SELECT providers.parse_speed_to_int('1772 MiB/s');
 Сначала откатить код coordinator (формула снова ждёт `integer`), затем:
 
 ```bash
-psql ... -f coordinator/db/migrations/002_parse_speed_bigint.down.sql
+psql ... -f db/migrations/002_parse_speed_bigint.down.sql
 ```
 
 Откат кода без down.sql безопасен: `bigint` совместим со старыми вызовами. Down нужен, только если надо вернуть прежний `integer`.
@@ -40,7 +40,7 @@ psql ... -f coordinator/db/migrations/002_parse_speed_bigint.down.sql
 1. Выполнить SQL **до** деплоя новой версии coordinator:
 
 ```bash
-psql -h <host> -U pguser -d providerdb -f coordinator/db/migrations/001_pipeline_events.up.sql
+psql -h <host> -U pguser -d providerdb -f db/migrations/001_pipeline_events.up.sql
 ```
 
 2. Проверить таблицы:
@@ -61,7 +61,7 @@ SELECT * FROM providers.provider_pipeline_events ORDER BY created_at DESC LIMIT 
 ### Откат SQL
 
 ```bash
-psql ... -f coordinator/db/migrations/001_pipeline_events.down.sql
+psql ... -f db/migrations/001_pipeline_events.down.sql
 ```
 
 Откат кода coordinator без down.sql: запись событий прекращается, таблицы можно оставить.

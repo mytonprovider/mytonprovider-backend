@@ -4,86 +4,91 @@
 
 Стек:
 - `coordinator`
-- `postgres` (инициализация схемы из `coordinator/db/init.sql`)
+- `postgres` (инициализация схемы из `db/init.sql`)
 - `prometheus`
 - `grafana`
 
 ## Чеклист продакшн-деплоя (порядок)
 
 1. VPS: Docker + Compose + Task + git; клон репо, нужная ветка (`git checkout <branch>`).
-2. **TLS:** CA и сертификаты агентов — [agent/README.ru.md](../../agent/README.ru.md); на coordinator: `secrets/agents-ca.crt`, каталог `certs/agent-*/` для выдачи.
-3. `task coordinator:deploy:init` → правка `coordinator/deploy/.env` (см. ниже).
-3a. **Pipeline events (если обновление с новой версией):** на существующей БД выполнить SQL **до** деплоя coordinator — [coordinator/db/migrations/README.ru.md](../db/migrations/README.ru.md) (`001_pipeline_events.up.sql`). Новые инсталлы получают таблицы из `init.sql` автоматически.
-4. `task coordinator:deploy:up` (в compose уже проброшен UDP `16167` для ADNL/DHT).
+2. **TLS:** CA и сертификаты агентов — [mytonprovider-agent](https://github.com/mytonprovider/mytonprovider-agent); на coordinator: `secrets/agents-ca.crt`, каталог `certs/agent-*/` для выдачи.
+3. `task deploy:init` → правка `deploy/.env` (см. ниже).
+3a. **Pipeline events (если обновление с новой версией):** на существующей БД выполнить SQL **до** деплоя coordinator — [db/migrations/README.ru.md](../db/migrations/README.ru.md) (`001_pipeline_events.up.sql`). Новые инсталлы получают таблицы из `init.sql` автоматически.
+4. `task deploy:up` (в compose уже проброшен UDP `16167` для ADNL/DHT).
 5. Smoke: `/health`, `/metrics` с Bearer (см. [secrets/README.ru.md](secrets/README.ru.md)).
 6. Опционально: Tailscale на coordinator и агенты; `AGENT_ENDPOINTS` = Tailscale IP агентов.
-7. На каждом агенте: новые `server.crt`/`server.key`, тот же `AGENT_AUTH_TOKEN`, `chmod 644` на ключ — [agent/deploy/secrets/README.ru.md](../../agent/deploy/secrets/README.ru.md).
+7. На каждом агенте: новые `server.crt`/`server.key`, тот же `AGENT_AUTH_TOKEN`, `chmod 644` на ключ — [mytonprovider-agent](https://github.com/mytonprovider/mytonprovider-agent).
 8. Опционально: `ufw` (не открывать `5432` наружу).
 9. Опционально: фронт — [§ Фронт](#фронт-nginx).
 
 ## Место на диске (VPS)
 
-`task coordinator:deploy:up` запускает **`docker compose ... --build`**: образ coordinator **собирается на VPS** (см. `build:` у сервиса `coordinator` в [docker-compose.yml](docker-compose.yml)). Ожидайте расход диска на образ Go builder и кэш сборки — это тяжелее, чем hub-режим.
+`task deploy:up` запускает **`docker compose ... --build`**: образ coordinator **собирается на VPS** (см. `build:` у сервиса `coordinator` в [docker-compose.yml](docker-compose.yml)). Ожидайте расход диска на образ Go builder и кэш сборки — это тяжелее, чем hub-режим.
 
-**Рекомендуется для VPS:** образ из Docker Hub — см. [§ Docker Hub](#docker-hub-рекомендуется-для-vps) ниже.
+**Рекомендуется для VPS:** образ из GHCR — см. [§ GHCR](#ghcr-рекомендуется-для-vps) ниже.
 
-## Docker Hub (рекомендуется для VPS)
+## GHCR (рекомендуется для VPS)
 
-Сборка на dev-машине, на VPS только `pull` + `compose up` — без `golang:bookworm` и компиляции на сервере.
+Образ публикует задание `publish` в `CI` после проверок при каждом push в `master` (`ghcr.io/mytonprovider/mytonprovider-backend:<tag>`, тег — первые 7 символов коммита), на VPS только `pull` + `compose up` — без `golang:bookworm` и компиляции на сервере.
 
 | Шаг | Где | Команда |
 |-----|-----|---------|
-| 1 | Dev-машина | `COORDINATOR_IMAGE=<user>/mytonprovider-coordinator:<tag> task coordinator:image:build:push` |
-| 2 | VPS | Клон репо, `coordinator/deploy/` + secrets |
-| 3 | VPS | `task coordinator:hub:init` → правка `coordinator/deploy/.env.hub` |
-| 4 | VPS | `task coordinator:hub:up` |
+| 1 | GitHub | Слияние в `master` → задание `publish` в `CI` публикует образ |
+| 2 | VPS | Клон репо, `deploy/` + secrets |
+| 3 | VPS | `task hub:init` → правка `deploy/.env.hub` |
+| 4 | VPS | `task hub:up` |
 
-**Зачем:** `task coordinator:deploy:up` делает `docker compose ... --build`. Hub compose ([docker-compose.hub.yml](docker-compose.hub.yml)) использует `image: ${COORDINATOR_IMAGE}` и `pull_policy: always`.
+**Зачем:** `task deploy:up` делает `docker compose ... --build`. Hub compose ([docker-compose.hub.yml](docker-compose.hub.yml)) использует `image: ${COORDINATOR_IMAGE}` и `pull_policy: always`.
 
-### Dev-машина: build + push
+### Сборка и push вручную (dev-машина, запасной путь)
 
 ```bash
-COORDINATOR_IMAGE=<docker-user>/mytonprovider-coordinator:latest task coordinator:image:build:push
+docker login ghcr.io
+COORDINATOR_IMAGE=ghcr.io/mytonprovider/mytonprovider-backend:<tag> task image:build:push
 ```
 
-По отдельности: `task coordinator:image:build`, `task coordinator:image:push` (нужен `COORDINATOR_IMAGE`).
+По отдельности: `task image:build`, `task image:push` (нужен `COORDINATOR_IMAGE`).
 
 ### VPS: pull + up
 
 ```bash
-task coordinator:hub:init
-nano coordinator/deploy/.env.hub
-task coordinator:hub:up
-task coordinator:hub:ps
+task hub:init
+nano deploy/.env.hub
+task hub:up
+task hub:ps
 ```
 
 В `.env.hub`:
-- `COORDINATOR_IMAGE=<docker-user>/mytonprovider-coordinator:latest`
+- `COORDINATOR_IMAGE=ghcr.io/mytonprovider/mytonprovider-backend:<tag>`
 - остальное — как в [`.env.example`](.env.example) (`DB_*`, `AGENT_*`, порты)
 
 Секреты: `secrets/agents-ca.crt`, `secrets/metrics.token` — как для обычного деплоя.
 
-Остановка: `task coordinator:hub:down`.
+Остановка: `task hub:down`.
 
 ### Задачи Task (hub)
 
 | Task | Описание |
 |------|----------|
-| `coordinator:image:build` | Сборка образа локально (`COORDINATOR_IMAGE`) |
-| `coordinator:image:push` | Push образа |
-| `coordinator:image:build:push` | Сборка + push |
-| `coordinator:hub:init` | Создать `.env.hub` из example |
-| `coordinator:hub:up` / `down` / `ps` / `logs` | Стек из образа Hub |
+| `image:build` | Сборка образа локально (`COORDINATOR_IMAGE`) |
+| `image:push` | Push образа |
+| `image:build:push` | Сборка + push |
+| `hub:init` | Создать `.env.hub` из example |
+| `hub:up` / `down` / `ps` / `logs` | Стек из образа |
 
-Фронтенд — по-прежнему [§ Фронт](#фронт-nginx) (`task coordinator:deploy:frontend` или ручной nginx).
+Фронтенд — по-прежнему [§ Фронт](#фронт-nginx) (`task deploy:frontend` или ручной nginx).
+
+### Обновление с `mytonprovider-coordinator`
+
+Файлы compose переехали из `coordinator/deploy/` в `deploy/`: перенесите туда `.env`, `.env.hub` и `secrets/`. Проект compose теперь называется `mytonprovider-backend`, поэтому тома — `mytonprovider-backend_postgres_data`, `_prometheus_tsdb` и `_grafana_data`. На существующей установке первый `up` из этого репозитория поднимет пустую базу. Перед ним: снимите дамп базы, остановите старый стек через `down` (без `-v`), скопируйте данные из томов `mytonprovider-coordinator_*` в новые и проверьте их. Старые тома удаляйте только после этого.
 
 ## 1) Подготовка
 
 Из корня репозитория:
 
 ```bash
-task coordinator:deploy:init
-nano coordinator/deploy/.env
+task deploy:init
+nano deploy/.env
 ```
 
 ### Обязательно в `.env`
@@ -153,10 +158,10 @@ mkdir -p certs/ca
 openssl genrsa -out certs/ca/ca.key 4096
 openssl req -x509 -new -nodes -key certs/ca/ca.key -sha256 -days 3650 \
   -out certs/ca/ca.crt -subj "/CN=mytonprovider-root-ca"
-cp certs/ca/ca.crt coordinator/deploy/secrets/agents-ca.crt
+cp certs/ca/ca.crt deploy/secrets/agents-ca.crt
 
 # Сертификат агента: IP.1 = адрес из AGENT_ENDPOINTS (часто Tailscale 100.x.x.x)
-# Подробно: agent/README.ru.md
+# Подробно: README репозитория mytonprovider-agent
 ```
 
 При **смене coordinator** (новая CA): перевыпустите все `server.crt`/`server.key` агентов и обновите `agents-ca.crt`. Старые сертификаты от тестового coordinator не подойдут.
@@ -164,16 +169,16 @@ cp certs/ca/ca.crt coordinator/deploy/secrets/agents-ca.crt
 ## 2) Запуск
 
 ```bash
-task coordinator:deploy:up
+task deploy:up
 ```
 
 ## 3) Smoke checks
 
 ```bash
-task coordinator:deploy:ps
+task deploy:ps
 curl -fsS "http://127.0.0.1:${COORDINATOR_PORT:-8080}/health"
 
-METRICS=$(tr -d '\n' < coordinator/deploy/secrets/metrics.token)
+METRICS=$(tr -d '\n' < deploy/secrets/metrics.token)
 curl -fsS -H "Authorization: Bearer ${METRICS}" \
   "http://127.0.0.1:${COORDINATOR_PORT:-8080}/metrics" | head -3
 ```
@@ -189,8 +194,8 @@ nc -zv <agent-tailscale-ip> 8443
 ## 4) Логи / остановка
 
 ```bash
-task coordinator:deploy:logs
-task coordinator:deploy:down
+task deploy:logs
+task deploy:down
 ```
 
 ## Tailscale (coordinator ↔ агенты)
@@ -230,7 +235,7 @@ TLS для `mytonprovider.org` и `api.mytonprovider.org` — снаружи с�
 
 ### Старый фронт (nginx на хосте)
 
-`task coordinator:deploy:frontend` — legacy Next.js через host nginx. Для нового фронта используйте Docker Hub flow выше.
+`task deploy:frontend` — legacy Next.js через host nginx. Для нового фронта используйте образ, как выше.
 
 ## Фронт (nginx, legacy)
 
@@ -243,7 +248,7 @@ DOMAIN=<vps-public-ip> \
 PUBLIC_ORIGIN=http://<vps-public-ip> \
 INSTALL_SSL=false \
 COORDINATOR_PORT=8080 \
-task coordinator:deploy:frontend
+task deploy:frontend
 ```
 
 **По домену (SSL):**
@@ -252,7 +257,7 @@ task coordinator:deploy:frontend
 DOMAIN=mytonprovider.org \
 PUBLIC_ORIGIN=https://mytonprovider.org \
 INSTALL_SSL=true \
-task coordinator:deploy:frontend
+task deploy:frontend
 ```
 
 Откройте в firewall `80` / `443` при необходимости.

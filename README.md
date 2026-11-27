@@ -6,12 +6,7 @@ Backend for [mytonprovider.org](https://mytonprovider.org) — monitoring and he
 
 ## Architecture
 
-Two Go services share protobuf contracts in `contracts/`:
-
-| Component | Role |
-|-----------|------|
-| **coordinator** | HTTP API for the frontend, Postgres, background workers (provider lifecycle, telemetry, cleanup), orchestrates checks via gRPC to agents |
-| **agent** | gRPC service (`RunChecks`, `RunStorageRates`), ADNL transport to providers, optional Prometheus metrics and Loki push |
+The coordinator serves the HTTP API for the frontend, keeps data in Postgres, runs background workers (provider lifecycle, telemetry, cleanup) and orchestrates checks via gRPC to agents. The agent lives in [mytonprovider-agent](https://github.com/mytonprovider/mytonprovider-agent), together with the protobuf contracts.
 
 ```mermaid
 flowchart LR
@@ -24,40 +19,20 @@ flowchart LR
 ## Repository layout
 
 ```
-├── agent/              # gRPC check agent
-├── coordinator/        # API, workers, db/init.sql
-├── contracts/          # proto + generated Go
-├── observability/      # local Prometheus + Grafana + Loki (dev)
-├── Taskfile.yml        # proto, tests, deploy tasks
-└── go.work
+├── cmd/                # coordinator entrypoint, dump-runchecks
+├── internal/           # API, workers, clients, repositories
+├── db/                 # init.sql + migrations
+├── deploy/             # Docker Compose for VPS
+└── Taskfile.yml        # dump, deploy tasks
 ```
 
 ## Development
 
-**Prerequisites:** Go 1.26+ ([go.work](go.work)), [Task](https://taskfile.dev), `grpcurl`, `openssl`, `protoc` (for `task proto:gen`).
-
-```bash
-# Regenerate protobuf (after editing contracts/proto)
-task proto:gen
-task proto:check
-
-# Run agent locally with test TLS + token
-task agent:run:test
-```
-
-In another terminal — gRPC smoke tests (agent must already be running):
-
-```bash
-task agent:test:smoke
-```
-
-Live checks against real TON data: [agent/tests/grpc/README.md](agent/tests/grpc/README.md) · [RU](agent/tests/grpc/README.ru.md).
-
-**TLS for production agents:** [agent/README.md](agent/README.md) · [RU](agent/README.ru.md)
+**Prerequisites:** Go 1.26+, [Task](https://taskfile.dev).
 
 ### VS Code
 
-Example `launch.json` entries:
+Example `launch.json` entry:
 
 ```json
 {
@@ -68,55 +43,63 @@ Example `launch.json` entries:
       "type": "go",
       "request": "launch",
       "mode": "auto",
-      "program": "${workspaceFolder}/coordinator/cmd",
+      "program": "${workspaceFolder}/cmd",
       "buildFlags": "-tags=debug"
-    },
-    {
-      "name": "Agent",
-      "type": "go",
-      "request": "launch",
-      "mode": "auto",
-      "program": "${workspaceFolder}/agent/cmd/agent"
     }
   ]
 }
 ```
 
-Set `env` in each configuration to match `coordinator/deploy/.env.example` or test vars from `Taskfile.yml` (`task agent:run:test`).
+Set `env` to match `deploy/.env.example`.
+
+### RunChecks dump
+
+`dump-runchecks` builds a `RunChecks` request with the real coordinator logic and writes it to JSON. The agent replay tasks take this file — see [mytonprovider-agent](https://github.com/mytonprovider/mytonprovider-agent).
+
+```bash
+task dump:runchecks
+```
+
+Writes `tmp/runchecks-live.json` and `tmp/runchecks-live-meta.json` (geo by storage IP); `tmp/` is gitignored.
+
+By default `dump-runchecks` uses **`--storage=memory`**: it runs `CollectNewProviders` and `CollectProvidersNewStorageContracts` against an in-process fake DB (no Postgres). You still need network access to TON (and a real `MASTER_ADDRESS` / `TON_CONFIG_URL` if defaults are not enough):
+
+```bash
+export MASTER_ADDRESS=<your-master-wallet>
+task dump:runchecks
+```
+
+To read existing rows from Postgres instead (set `DB_*` the same as coordinator):
+
+```bash
+go run ./cmd/dump-runchecks --storage=postgres --limit 1 --out tmp/runchecks-live.json
+```
+
+`task dump:runchecks:with-storage-rates` also writes `tmp/runchecks-live-storage-rates.json` for `RunStorageRates` (pubkeys taken from the built RunChecks payload, same order). Manual equivalent:
+
+```bash
+go run ./cmd/dump-runchecks --limit 50 --out tmp/runchecks-live.json --also-dump-storage-rates
+```
+
+Optional flags: `--storage-rates-out`, `--rates-job-id`, `--rates-query-timeout-ms`, `--rates-total-ms`, `--rates-query-size` (see `go run ./cmd/dump-runchecks -help`).
 
 ## Docker deploy (VPS)
 
-**Full order (coordinator → agents → TLS):** [coordinator/deploy/README.md](coordinator/deploy/README.md) (checklist at top), TLS details in [agent/README.md](agent/README.md).
+**Full order (coordinator → agents → TLS):** [deploy/README.md](deploy/README.md) (checklist at top), TLS details in [mytonprovider-agent](https://github.com/mytonprovider/mytonprovider-agent).
 
-| Stack | Docs | Notes |
-|-------|------|--------|
-| Agent (+ optional monitoring) | [EN](agent/deploy/README.md) · [RU](agent/deploy/README.ru.md) | **VPS: prefer Docker Hub** — build image locally, pull on server |
-| Coordinator (+ Postgres + monitoring) | [EN](coordinator/deploy/README.md) · [RU](coordinator/deploy/README.ru.md) | **VPS: prefer Docker Hub** — build image locally, pull on server |
-
-**Agent on VPS (recommended):** build and push on your machine, then hub deploy — see [agent/deploy/README.md](agent/deploy/README.md#production--vps-docker-hub--recommended).
+The image is published by the `publish` job in `CI` after checks on every push to `master`: `ghcr.io/mytonprovider/mytonprovider-backend:<tag>`, the tag is the first 7 characters of the commit. Manual `task image:build:push` stays as a fallback.
 
 ```bash
-# Dev machine
-AGENT_IMAGE=<user>/mytonprovider-agent:latest task agent:image:build:push
 # VPS
-task agent:hub:init && nano agent/deploy/.env.hub && task agent:hub:stack:up
+task hub:init && nano deploy/.env.hub && task hub:up
 ```
 
-**Coordinator quick start** (build on VPS, dev/debugging):
+**Quick start** (build on VPS, dev/debugging):
 
 ```bash
-task coordinator:deploy:init
-nano coordinator/deploy/.env
-task coordinator:deploy:up
-```
-
-**Coordinator on VPS (recommended):** build and push on your machine, then hub:
-
-```bash
-# Dev machine
-COORDINATOR_IMAGE=<user>/mytonprovider-coordinator:latest task coordinator:image:build:push
-# VPS
-task coordinator:hub:init && nano coordinator/deploy/.env.hub && task coordinator:hub:up
+task deploy:init
+nano deploy/.env
+task deploy:up
 ```
 
 **Frontend-only deploy** (after coordinator is already running):
@@ -128,12 +111,12 @@ task coordinator:hub:init && nano coordinator/deploy/.env.hub && task coordinato
 # Optional:
 # - INSTALL_SSL=true (domain only), COORDINATOR_PORT=8080
 # By public IP (no SSL):
-DOMAIN=203.0.113.1 PUBLIC_ORIGIN=http://203.0.113.1 INSTALL_SSL=false task coordinator:deploy:frontend
+DOMAIN=203.0.113.1 PUBLIC_ORIGIN=http://203.0.113.1 INSTALL_SSL=false task deploy:frontend
 # By domain:
-DOMAIN=mytonprovider.org PUBLIC_ORIGIN=https://mytonprovider.org INSTALL_SSL=true task coordinator:deploy:frontend
+DOMAIN=mytonprovider.org PUBLIC_ORIGIN=https://mytonprovider.org INSTALL_SSL=true task deploy:frontend
 ```
 
-This task runs `coordinator/deploy/deploy_frontend.sh`: it installs dependencies, configures Nginx, builds frontend static files, and sets proxy routes (`/api`, `/health`, `/metrics`) to coordinator.
+This task runs `deploy/deploy_frontend.sh`: it installs dependencies, configures Nginx, builds frontend static files, and sets proxy routes (`/api`, `/health`, `/metrics`) to coordinator.
 
 Quick smoke checks after frontend deploy:
 
@@ -142,18 +125,6 @@ curl -fsS "http://127.0.0.1:8080/health"
 curl -fsS "http://127.0.0.1:8080/api/v1/providers/filters"
 curl -fsS "http://127.0.0.1/"
 ```
-
-**Agent build on VPS** (dev / debugging only):
-
-```bash
-task agent:deploy:init
-nano agent/deploy/.env
-task agent:deploy:up
-```
-
-## Local observability
-
-Prometheus + Grafana + Loki for development: [EN](observability/prometheus-grafana/README.md) · [RU](observability/prometheus-grafana/README.ru.md).
 
 ## Coordinator API and workers
 

@@ -2,7 +2,7 @@
 
 **[Русская версия](README.ru.md)**
 
-Place coordinator secret files here before `task coordinator:deploy:up`.
+Place coordinator secret files here before `task deploy:up`.
 
 ## Files
 
@@ -20,7 +20,7 @@ Place coordinator secret files here before `task coordinator:deploy:up`.
 After coordinator start:
 
 ```bash
-RAW=$(tr -d '\n' < coordinator/deploy/secrets/metrics.token)
+RAW=$(tr -d '\n' < deploy/secrets/metrics.token)
 curl -fsS -H "Authorization: Bearer ${RAW}" http://127.0.0.1:8080/metrics | head -1
 ```
 
@@ -28,7 +28,7 @@ If `.env` previously contained MD5 hex instead of raw tokens, restore **raw** va
 
 ## Agents
 
-- `AGENT_AUTH_TOKEN` in coordinator `.env` must match `AGENT_AUTH_TOKEN` in each `agent/deploy/.env.hub`.
+- `AGENT_AUTH_TOKEN` in coordinator `.env` must match `AGENT_AUTH_TOKEN` in each agent `deploy/.env.hub`.
 - Do not copy `agents-ca.crt` to agents — only per-agent `server.crt` / `server.key`.
 
-Cert issuance: [agent/README.md](../../../agent/README.md).
+Cert issuance: [mytonprovider-agent](https://github.com/mytonprovider/mytonprovider-agent).

@@ -4,68 +4,73 @@
 
 This stack runs:
 - `coordinator`
-- `postgres` (schema init from `coordinator/db/init.sql`)
+- `postgres` (schema init from `db/init.sql`)
 - `prometheus`
 - `grafana`
 
 ## Production deploy checklist (order)
 
 1. VPS: Docker + Compose + Task + git; clone repo, checkout the branch you need.
-2. **TLS:** CA and per-agent certs — [agent/README.md](../../agent/README.md); on coordinator: `secrets/agents-ca.crt`, `certs/agent-*/` for issuance.
-3. `task coordinator:deploy:init` → edit `coordinator/deploy/.env` (see below).
-4. `task coordinator:deploy:up` (compose publishes UDP `16167` for ADNL/DHT).
+2. **TLS:** CA and per-agent certs — [mytonprovider-agent](https://github.com/mytonprovider/mytonprovider-agent); on coordinator: `secrets/agents-ca.crt`, `certs/agent-*/` for issuance.
+3. `task deploy:init` → edit `deploy/.env` (see below).
+4. `task deploy:up` (compose publishes UDP `16167` for ADNL/DHT).
 5. Smoke: `/health`, `/metrics` with Bearer (see [secrets/README.md](secrets/README.md)).
 6. Optional: Tailscale on coordinator and agents; set `AGENT_ENDPOINTS` to agent Tailscale IPs.
-7. On each agent: deploy new `server.crt`/`server.key`, same `AGENT_AUTH_TOKEN`, `chmod 644` on the key — [agent/deploy/secrets/README.md](../../agent/deploy/secrets/README.md).
+7. On each agent: deploy new `server.crt`/`server.key`, same `AGENT_AUTH_TOKEN`, `chmod 644` on the key — [mytonprovider-agent](https://github.com/mytonprovider/mytonprovider-agent).
 8. Optional: `ufw` (do not expose Postgres `5432` publicly).
 9. Optional: frontend — [Frontend](#frontend-nginx).
 
 ## Disk usage on VPS
 
-`task coordinator:deploy:up` runs **`docker compose ... --build`**: the coordinator image is **compiled on the VPS**. Expect extra disk for the Go builder image and build cache — heavier than the **Docker Hub** flow.
+`task deploy:up` runs **`docker compose ... --build`**: the coordinator image is **compiled on the VPS**. Expect extra disk for the Go builder image and build cache — heavier than the **GHCR** flow.
 
-**Recommended for VPS:** pull a prebuilt image — see [Docker Hub](#docker-hub-recommended-for-vps) below.
+**Recommended for VPS:** pull a prebuilt image — see [GHCR](#ghcr-recommended-for-vps) below.
 
-## Docker Hub (recommended for VPS)
+## GHCR (recommended for VPS)
 
-Build on a dev machine, on the VPS only `pull` + `compose up` — no `golang:bookworm` compile on the server.
+The image is published by the `publish` job in `CI` after checks on every push to `master` (`ghcr.io/mytonprovider/mytonprovider-backend:<tag>`, the tag is the first 7 characters of the commit), on the VPS only `pull` + `compose up` — no `golang:bookworm` compile on the server.
 
 | Step | Where | Command |
 |------|-------|---------|
-| 1 | Dev machine | `COORDINATOR_IMAGE=<user>/mytonprovider-coordinator:<tag> task coordinator:image:build:push` |
-| 2 | VPS | Clone repo, `coordinator/deploy/` + secrets |
-| 3 | VPS | `task coordinator:hub:init` → edit `coordinator/deploy/.env.hub` |
-| 4 | VPS | `task coordinator:hub:up` |
+| 1 | GitHub | Merge to `master` → `publish` job in `CI` pushes the image |
+| 2 | VPS | Clone repo, `deploy/` + secrets |
+| 3 | VPS | `task hub:init` → edit `deploy/.env.hub` |
+| 4 | VPS | `task hub:up` |
 
 Hub compose ([docker-compose.hub.yml](docker-compose.hub.yml)) uses `image: ${COORDINATOR_IMAGE}` with `pull_policy: always`.
 
-### Dev machine: build + push
+### Build and push by hand (dev machine, fallback)
 
 ```bash
-COORDINATOR_IMAGE=<docker-user>/mytonprovider-coordinator:latest task coordinator:image:build:push
+docker login ghcr.io
+COORDINATOR_IMAGE=ghcr.io/mytonprovider/mytonprovider-backend:<tag> task image:build:push
 ```
 
 ### VPS: pull + up
 
 ```bash
-task coordinator:hub:init
-nano coordinator/deploy/.env.hub
-task coordinator:hub:up
+task hub:init
+nano deploy/.env.hub
+task hub:up
 ```
 
 Set `COORDINATOR_IMAGE` in `.env.hub`; other vars match [`.env.example`](.env.example).
 
-Stop: `task coordinator:hub:down`.
+Stop: `task hub:down`.
 
 Frontend deploy is unchanged — [Frontend](#frontend-nginx).
+
+### Upgrading from `mytonprovider-coordinator`
+
+The compose files moved from `coordinator/deploy/` to `deploy/`: move `.env`, `.env.hub` and `secrets/` there. The compose project is now `mytonprovider-backend`, so the volumes are `mytonprovider-backend_postgres_data`, `_prometheus_tsdb` and `_grafana_data`. On an existing install the first `up` from this repo starts with an empty database. Before it: dump the database, stop the old stack with `down` (without `-v`), copy the data from the `mytonprovider-coordinator_*` volumes into the new ones and check it. Remove the old volumes only after that.
 
 ## 1) Prepare
 
 From repository root:
 
 ```bash
-task coordinator:deploy:init
-nano coordinator/deploy/.env
+task deploy:init
+nano deploy/.env
 ```
 
 ### Required `.env` fields
@@ -123,23 +128,23 @@ DB write policy: successes and non-retriable errors are written immediately; tra
 
 ### Secrets
 
-See [secrets/README.md](secrets/README.md). Issue certs on the coordinator host; full steps in [agent/README.md](../../agent/README.md).
+See [secrets/README.md](secrets/README.md). Issue certs on the coordinator host; full steps in [mytonprovider-agent](https://github.com/mytonprovider/mytonprovider-agent).
 
 When **migrating to a new coordinator** with a new CA: re-issue all agent certs and replace `agents-ca.crt`. Old test-coordinator certs will not work.
 
 ## 2) Start
 
 ```bash
-task coordinator:deploy:up
+task deploy:up
 ```
 
 ## 3) Smoke checks
 
 ```bash
-task coordinator:deploy:ps
+task deploy:ps
 curl -fsS "http://127.0.0.1:${COORDINATOR_PORT:-8080}/health"
 
-METRICS=$(tr -d '\n' < coordinator/deploy/secrets/metrics.token)
+METRICS=$(tr -d '\n' < deploy/secrets/metrics.token)
 curl -fsS -H "Authorization: Bearer ${METRICS}" \
   "http://127.0.0.1:${COORDINATOR_PORT:-8080}/metrics" | head -3
 ```
@@ -147,8 +152,8 @@ curl -fsS -H "Authorization: Bearer ${METRICS}" \
 ## 4) Logs / stop
 
 ```bash
-task coordinator:deploy:logs
-task coordinator:deploy:down
+task deploy:logs
+task deploy:down
 ```
 
 ## Tailscale (coordinator ↔ agents)
@@ -178,7 +183,7 @@ TLS for `mytonprovider.org` and `api.mytonprovider.org` is configured outside th
 
 ### Legacy frontend (nginx on host)
 
-`task coordinator:deploy:frontend` still deploys the old Next.js app via host nginx + static build. Prefer the Docker Hub flow above for the new frontend.
+`task deploy:frontend` still deploys the old Next.js app via host nginx + static build. Prefer the image flow above for the new frontend.
 
 ## Frontend (nginx, legacy)
 
@@ -188,7 +193,7 @@ TLS for `mytonprovider.org` and `api.mytonprovider.org` is configured outside th
 DOMAIN=<vps-public-ip> \
 PUBLIC_ORIGIN=http://<vps-public-ip> \
 INSTALL_SSL=false \
-task coordinator:deploy:frontend
+task deploy:frontend
 ```
 
 **By domain (SSL):** set `INSTALL_SSL=true` and `PUBLIC_ORIGIN=https://<domain>`.
