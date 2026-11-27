@@ -5,503 +5,58 @@ dotenv:
   - .env
 
 tasks:
-  proto:tools:
-    desc: Install protobuf Go generators
-    cmds:
-      - go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-      - go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
-
-  proto:gen:
-    desc: Generate Go code from shared proto contracts
-    cmds:
-      - mkdir -p contracts/gen/go
-      - protoc -I contracts/proto --go_out=contracts/gen/go --go_opt=paths=source_relative --go-grpc_out=contracts/gen/go --go-grpc_opt=paths=source_relative providerchecks/v1/provider_checks.proto
-
-  proto:check:
-    desc: Verify generated proto code is up to date
-    cmds:
-      - task proto:gen
-      - git diff --exit-code -- contracts/gen/go
-
-  postman:run:
-    desc: Run Postman collection for agent gRPC
-    cmds:
-      - mkdir -p agent/tests/postman/reports
-      - |
-        if ! command -v postman >/dev/null 2>&1 || ! postman collection run --help >/dev/null 2>&1; then
-          echo "Postman CLI is not installed (or desktop postman is used). Install CLI: https://learning.postman.com/docs/postman-cli/postman-cli-installation/"
-          exit 1
-        fi
-      - |
-        postman collection run \
-          "agent/tests/postman/agent-grpc.postman_collection.json" \
-          --environment "agent/tests/postman/agent-local.postman_environment.json" \
-          --reporters cli,json \
-          --reporter-json-export "agent/tests/postman/reports/postman-report.json" \
-          ${POSTMAN_CA_CERT:+--ssl-extra-ca-certs "$POSTMAN_CA_CERT"} \
-          --verbose
-
-  agent:certs:test:
-    desc: Generate local self-signed certs for agent tests
-    cmds:
-      - mkdir -p agent/tests/certs
-      - |
-        openssl req -x509 -newkey rsa:2048 -sha256 -nodes \
-          -keyout agent/tests/certs/server.key \
-          -out agent/tests/certs/server.crt \
-          -days 365 \
-          -subj "/CN=127.0.0.1" \
-          -addext "subjectAltName=IP:127.0.0.1"
-
-  agent:run:test:
-    desc: Run agent locally with test env and local certs
-    deps:
-      - agent:certs:test
-    cmds:
-      - |
-        AGENT_LISTEN_ADDR=:8443 \
-        AGENT_ID=test-agent \
-        AGENT_LOCATION=local \
-        AGENT_AUTH_TOKEN=test-token \
-        AGENT_TLS_CERT_FILE=agent/tests/certs/server.crt \
-        AGENT_TLS_KEY_FILE=agent/tests/certs/server.key \
-        AGENT_MAX_CONCURRENT_PROVIDERS=40 \
-        AGENT_ADNL_PORT=36167 \
-        AGENT_METRICS_LISTEN_ADDR=0.0.0.0:9090 \
-        AGENT_LOKI_URL=http://127.0.0.1:3100 \
-        go run ./agent/cmd/agent
-
-  agent:test:smoke:
-    desc: Run grpcurl smoke checks against already running test agent
-    cmds:
-      - |
-        if ! command -v grpcurl >/dev/null 2>&1; then
-          echo "grpcurl is required. Install: https://github.com/fullstorydev/grpcurl#installation"
-          exit 1
-        fi
-      - |
-        set -euo pipefail
-        echo "Expecting running agent on 127.0.0.1:8443 (start separately with: task agent:run:test)"
-
-        echo "=== CASE 1: valid token + valid payload ==="
-        VALID_OUT="$(grpcurl -insecure -import-path contracts/proto -proto providerchecks/v1/provider_checks.proto -H "authorization: Bearer test-token" -d @ 127.0.0.1:8443 providerchecks.v1.ProviderChecksService/RunChecks < agent/tests/grpc/runchecks-valid.json)"
-        echo "$VALID_OUT"
-        if echo "$VALID_OUT" | rg -q '"jobId": "smoke-valid-1"' && echo "$VALID_OUT" | rg -q '"results":'; then
-          echo "PASS: valid request returned response with results"
-        else
-          echo "FAIL: valid request output mismatch"
-          exit 1
-        fi
-
-        echo "=== CASE 2: invalid token ==="
-        set +e
-        BAD_TOKEN_OUT="$(grpcurl -insecure -import-path contracts/proto -proto providerchecks/v1/provider_checks.proto -H "authorization: Bearer bad-token" -d @ 127.0.0.1:8443 providerchecks.v1.ProviderChecksService/RunChecks < agent/tests/grpc/runchecks-invalid-token.json 2>&1)"
-        BAD_TOKEN_CODE=$?
-        set -e
-        echo "$BAD_TOKEN_OUT"
-        if [ $BAD_TOKEN_CODE -ne 0 ] && echo "$BAD_TOKEN_OUT" | rg -q 'Code: Unauthenticated'; then
-          echo "PASS: invalid token rejected with Unauthenticated"
-        else
-          echo "FAIL: invalid token case mismatch"
-          exit 1
-        fi
-
-        echo "=== CASE 3: invalid payload ==="
-        set +e
-        BAD_PAYLOAD_OUT="$(grpcurl -insecure -import-path contracts/proto -proto providerchecks/v1/provider_checks.proto -H "authorization: Bearer test-token" -d @ 127.0.0.1:8443 providerchecks.v1.ProviderChecksService/RunChecks < agent/tests/grpc/runchecks-invalid-payload.json 2>&1)"
-        BAD_PAYLOAD_CODE=$?
-        set -e
-        echo "$BAD_PAYLOAD_OUT"
-        if [ $BAD_PAYLOAD_CODE -ne 0 ] && echo "$BAD_PAYLOAD_OUT" | rg -q 'Code: InvalidArgument'; then
-          echo "PASS: invalid payload rejected with InvalidArgument"
-        else
-          echo "FAIL: invalid payload case mismatch"
-          exit 1
-        fi
-
-        echo "=== SUMMARY ==="
-        echo "3/3 cases passed"
-
-  coordinator:dump:runchecks:
+  dump:runchecks:
     desc: Dump RunChecks JSON + runchecks-live-meta.json (geo по storage IP). Default in-memory; use --storage=postgres + DB_* for DB
     cmds:
-      - go run ./coordinator/cmd/dump-runchecks --limit 50 --out agent/tests/grpc/runchecks-live.json
+      - go run ./cmd/dump-runchecks --limit 50 --out tmp/runchecks-live.json
 
-  coordinator:dump:runchecks:with-storage-rates:
-    desc: "Same as coordinator:dump:runchecks plus agent/tests/grpc/runchecks-live-storage-rates.json for RunStorageRates grpcurl"
+  dump:runchecks:with-storage-rates:
+    desc: "Same as dump:runchecks plus tmp/runchecks-live-storage-rates.json for RunStorageRates grpcurl"
     cmds:
-      - go run ./coordinator/cmd/dump-runchecks --limit 50 --out agent/tests/grpc/runchecks-live.json --also-dump-storage-rates
+      - go run ./cmd/dump-runchecks --limit 50 --out tmp/runchecks-live.json --also-dump-storage-rates
 
-  agent:test:live:
-    desc: Run one real dumped request against running test agent
-    deps:
-      - coordinator:dump:runchecks
-    cmds:
-      - |
-        set -euo pipefail
-        if ! command -v grpcurl >/dev/null 2>&1; then
-          echo "grpcurl is required. Install: https://github.com/fullstorydev/grpcurl#installation"
-          exit 1
-        fi
-        mkdir -p agent/tests/grpc/reports
-        LAST_JSON="agent/tests/grpc/reports/runchecks-live-last.json"
-        # -d @ must stay inside a shell block: bare @ in a Task cmd line is reserved syntax
-        grpcurl -insecure \
-          -import-path contracts/proto \
-          -proto providerchecks/v1/provider_checks.proto \
-          -H "authorization: Bearer test-token" \
-          -d @ \
-          127.0.0.1:8443 \
-          providerchecks.v1.ProviderChecksService/RunChecks \
-          < agent/tests/grpc/runchecks-live.json | tee "$LAST_JSON"
-        if command -v jq >/dev/null 2>&1; then
-          TOTAL="$(jq '.results | length' "$LAST_JSON")"
-          OK="$(jq '[.results[] | select(.reasonCode == "VALID_STORAGE_PROOF" or .reasonCode == 1)] | length' "$LAST_JSON")"
-          NOT_OK=$((TOTAL - OK))
-          echo ""
-          echo "=== RunChecks contract summary ==="
-          echo "  valid (VALID_STORAGE_PROOF): $OK"
-          echo "  other / failed:            $NOT_OK"
-          echo "  total results:              $TOTAL"
-          META_JSON="agent/tests/grpc/runchecks-live-meta.json"
-          if [[ ! -f "$META_JSON" ]]; then
-            EMPTY_META="$(mktemp)"
-            printf '%s\n' '{"providers":[]}' > "$EMPTY_META"
-            META_JSON="$EMPTY_META"
-          fi
-          echo ""
-          jq -r -f agent/tests/grpc/runchecks-live-summary.jq --slurpfile META "$META_JSON" "$LAST_JSON"
-        else
-          echo ""
-          echo "(Install jq to print contract pass/fail summary.)"
-        fi
-
-  agent:test:live:storage-rates:
-    desc: "Dump RunChecks + RunStorageRates JSON, then call agent RunStorageRates (start agent first: task agent:run:test)"
-    deps:
-      - coordinator:dump:runchecks:with-storage-rates
-    cmds:
-      - |
-        set -euo pipefail
-        if ! command -v grpcurl >/dev/null 2>&1; then
-          echo "grpcurl is required. Install: https://github.com/fullstorydev/grpcurl#installation"
-          exit 1
-        fi
-        RATES_REQ="agent/tests/grpc/runchecks-live-storage-rates.json"
-        if [[ ! -f "$RATES_REQ" ]]; then
-          echo "$RATES_REQ not found. Run: task coordinator:dump:runchecks:with-storage-rates"
-          exit 1
-        fi
-        mkdir -p agent/tests/grpc/reports
-        LAST_JSON="agent/tests/grpc/reports/runchecks-storage-rates-last.json"
-        grpcurl -insecure \
-          -import-path contracts/proto \
-          -proto providerchecks/v1/provider_checks.proto \
-          -H "authorization: Bearer test-token" \
-          -d @ \
-          127.0.0.1:8443 \
-          providerchecks.v1.ProviderChecksService/RunStorageRates \
-          < "$RATES_REQ" | tee "$LAST_JSON"
-        if command -v jq >/dev/null 2>&1; then
-          TOTAL="$(jq '.results | length' "$LAST_JSON")"
-          OK="$(jq '[.results[] | select(.ok == true)] | length' "$LAST_JSON")"
-          NOT_OK=$((TOTAL - OK))
-          echo ""
-          echo "=== RunStorageRates summary (informational; network may fail rows) ==="
-          echo "  ok rows:    $OK"
-          echo "  fail rows:  $NOT_OK"
-          echo "  total rows: $TOTAL"
-        else
-          echo ""
-          echo "(Install jq to print row summary.)"
-        fi
-
-  agent:test:live:storage-rates:replay:
-    desc: Replay existing runchecks-live-storage-rates.json against running test agent (no new dump)
-    cmds:
-      - |
-        set -euo pipefail
-        if ! command -v grpcurl >/dev/null 2>&1; then
-          echo "grpcurl is required. Install: https://github.com/fullstorydev/grpcurl#installation"
-          exit 1
-        fi
-        RATES_REQ="agent/tests/grpc/runchecks-live-storage-rates.json"
-        if [[ ! -f "$RATES_REQ" ]]; then
-          echo "$RATES_REQ not found. Generate it first via: task coordinator:dump:runchecks:with-storage-rates"
-          exit 1
-        fi
-        mkdir -p agent/tests/grpc/reports
-        LAST_JSON="agent/tests/grpc/reports/runchecks-storage-rates-last.json"
-        grpcurl -insecure \
-          -import-path contracts/proto \
-          -proto providerchecks/v1/provider_checks.proto \
-          -H "authorization: Bearer test-token" \
-          -d @ \
-          127.0.0.1:8443 \
-          providerchecks.v1.ProviderChecksService/RunStorageRates \
-          < "$RATES_REQ" | tee "$LAST_JSON"
-        if command -v jq >/dev/null 2>&1; then
-          TOTAL="$(jq '.results | length' "$LAST_JSON")"
-          OK="$(jq '[.results[] | select(.ok == true)] | length' "$LAST_JSON")"
-          NOT_OK=$((TOTAL - OK))
-          echo ""
-          echo "=== RunStorageRates summary (informational; network may fail rows) ==="
-          echo "  ok rows:    $OK"
-          echo "  fail rows:  $NOT_OK"
-          echo "  total rows: $TOTAL"
-        else
-          echo ""
-          echo "(Install jq to print row summary.)"
-        fi
-
-  agent:test:live:replay:
-    desc: Replay existing runchecks-live.json against running test agent (no new dump)
-    cmds:
-      - |
-        set -euo pipefail
-        if ! command -v grpcurl >/dev/null 2>&1; then
-          echo "grpcurl is required. Install: https://github.com/fullstorydev/grpcurl#installation"
-          exit 1
-        fi
-        if [[ ! -f agent/tests/grpc/runchecks-live.json ]]; then
-          echo "agent/tests/grpc/runchecks-live.json not found. Generate it first via: task coordinator:dump:runchecks"
-          exit 1
-        fi
-        mkdir -p agent/tests/grpc/reports
-        LAST_JSON="agent/tests/grpc/reports/runchecks-live-last.json"
-        grpcurl -insecure \
-          -import-path contracts/proto \
-          -proto providerchecks/v1/provider_checks.proto \
-          -H "authorization: Bearer test-token" \
-          -d @ \
-          127.0.0.1:8443 \
-          providerchecks.v1.ProviderChecksService/RunChecks \
-          < agent/tests/grpc/runchecks-live.json | tee "$LAST_JSON"
-        if command -v jq >/dev/null 2>&1; then
-          TOTAL="$(jq '.results | length' "$LAST_JSON")"
-          OK="$(jq '[.results[] | select(.reasonCode == "VALID_STORAGE_PROOF" or .reasonCode == 1)] | length' "$LAST_JSON")"
-          NOT_OK=$((TOTAL - OK))
-          echo ""
-          echo "=== RunChecks contract summary ==="
-          echo "  valid (VALID_STORAGE_PROOF): $OK"
-          echo "  other / failed:            $NOT_OK"
-          echo "  total results:              $TOTAL"
-          META_JSON="agent/tests/grpc/runchecks-live-meta.json"
-          if [[ ! -f "$META_JSON" ]]; then
-            EMPTY_META="$(mktemp)"
-            printf '%s\n' '{"providers":[]}' > "$EMPTY_META"
-            META_JSON="$EMPTY_META"
-          fi
-          echo ""
-          jq -r -f agent/tests/grpc/runchecks-live-summary.jq --slurpfile META "$META_JSON" "$LAST_JSON"
-        else
-          echo ""
-          echo "(Install jq to print contract pass/fail summary.)"
-        fi
-
-  agent:deploy:init:
-    desc: Prepare agent deploy env and secrets placeholders
-    cmds:
-      - mkdir -p agent/deploy/secrets
-      - |
-        if [ ! -f agent/deploy/.env ]; then
-          cp agent/deploy/.env.example agent/deploy/.env
-          echo "Created agent/deploy/.env from .env.example"
-        else
-          echo "agent/deploy/.env already exists"
-        fi
-      - |
-        if [ ! -f agent/deploy/secrets/server.crt ]; then
-          echo "Place TLS cert into agent/deploy/secrets/server.crt"
-        fi
-      - |
-        if [ ! -f agent/deploy/secrets/server.key ]; then
-          echo "Place TLS key into agent/deploy/secrets/server.key"
-        fi
-
-  agent:deploy:up:
-    desc: Build and start agent deploy stack
-    cmds:
-      - docker compose --env-file agent/deploy/.env -f agent/deploy/docker-compose.yml up -d --build
-
-  agent:deploy:down:
-    desc: Stop agent deploy stack
-    cmds:
-      - docker compose --env-file agent/deploy/.env -f agent/deploy/docker-compose.yml down
-
-  agent:deploy:ps:
-    desc: Show agent deploy stack containers
-    cmds:
-      - docker compose --env-file agent/deploy/.env -f agent/deploy/docker-compose.yml ps
-
-  agent:deploy:logs:
-    desc: Follow logs for agent deploy stack
-    cmds:
-      - docker compose --env-file agent/deploy/.env -f agent/deploy/docker-compose.yml logs -f
-
-  agent:hub:init:
-    desc: Prepare agent Docker Hub deploy env and secrets placeholders
-    cmds:
-      - mkdir -p agent/deploy/secrets
-      - |
-        if [ ! -f agent/deploy/.env.hub ]; then
-          cp agent/deploy/.env.hub.example agent/deploy/.env.hub
-          echo "Created agent/deploy/.env.hub from .env.hub.example"
-        else
-          echo "agent/deploy/.env.hub already exists"
-        fi
-      - |
-        if [ ! -f agent/deploy/secrets/server.crt ]; then
-          echo "Place TLS cert into agent/deploy/secrets/server.crt"
-        fi
-      - |
-        if [ ! -f agent/deploy/secrets/server.key ]; then
-          echo "Place TLS key into agent/deploy/secrets/server.key"
-        fi
-
-  agent:hub:up:
-    desc: Pull and start agent from Docker Hub image (no local build)
-    cmds:
-      - docker compose --env-file agent/deploy/.env.hub -f agent/deploy/docker-compose.hub.yml up -d
-
-  agent:hub:down:
-    desc: Stop Docker Hub agent stack
-    cmds:
-      - docker compose --env-file agent/deploy/.env.hub -f agent/deploy/docker-compose.hub.yml down
-
-  agent:hub:ps:
-    desc: Show Docker Hub agent stack containers
-    cmds:
-      - docker compose --env-file agent/deploy/.env.hub -f agent/deploy/docker-compose.hub.yml ps
-
-  agent:hub:logs:
-    desc: Follow logs for Docker Hub agent stack
-    cmds:
-      - docker compose --env-file agent/deploy/.env.hub -f agent/deploy/docker-compose.hub.yml logs -f
-
-  agent:hub:runchecks:
-    desc: Summarize RunChecks completed lines from agent container logs (hub or hub.stack)
-    cmds:
-      - |
-        set -euo pipefail
-        if ! command -v python3 >/dev/null 2>&1; then
-          echo "python3 is required"
-          exit 1
-        fi
-        CID="$(docker compose --env-file agent/deploy/.env.hub -f agent/deploy/docker-compose.hub.yml ps -q agent 2>/dev/null || true)"
-        if [ -z "${CID}" ]; then
-          CID="$(docker compose --env-file agent/deploy/.env.hub -f agent/deploy/docker-compose.hub.stack.yml ps -q agent 2>/dev/null || true)"
-        fi
-        if [ -z "${CID}" ]; then
-          echo "No running agent container (tried docker-compose.hub.yml and docker-compose.hub.stack.yml)"
-          exit 1
-        fi
-        docker logs "${CID}" 2>&1 \
-          | (grep 'RunChecks completed' || true) \
-          | python3 -c '
-        import sys, json
-        for line in sys.stdin:
-            o = json.loads(line)
-            rc = o.get("reason_counts") or {}
-            print(
-                o.get("time"),
-                o.get("job_id"),
-                "valid=%s" % rc.get("VALID_STORAGE_PROOF", 0),
-                "ping=%s" % rc.get("PING_FAILED", 0),
-                "piece=%s" % rc.get("CANT_GET_PIECE", 0),
-                "unavail=%s" % rc.get("UNAVAILABLE_PROVIDER", 0),
-                "dur_ms=%s" % o.get("duration_ms"),
-            )
-        '
-
-  agent:hub:stack:up:
-    desc: Pull and start agent + monitoring stack from Docker Hub image (no local build)
-    cmds:
-      - docker compose --env-file agent/deploy/.env.hub -f agent/deploy/docker-compose.hub.stack.yml up -d
-
-  agent:hub:stack:down:
-    desc: Stop Docker Hub agent + monitoring stack
-    cmds:
-      - docker compose --env-file agent/deploy/.env.hub -f agent/deploy/docker-compose.hub.stack.yml down
-
-  agent:hub:stack:ps:
-    desc: Show Docker Hub agent + monitoring stack containers
-    cmds:
-      - docker compose --env-file agent/deploy/.env.hub -f agent/deploy/docker-compose.hub.stack.yml ps
-
-  agent:hub:stack:logs:
-    desc: Follow logs for Docker Hub agent + monitoring stack
-    cmds:
-      - docker compose --env-file agent/deploy/.env.hub -f agent/deploy/docker-compose.hub.stack.yml logs -f
-
-  agent:image:build:
-    desc: Build agent image locally (set AGENT_IMAGE)
-    cmds:
-      - |
-        if [ -z "${AGENT_IMAGE:-}" ]; then
-          echo "AGENT_IMAGE is required, e.g. AGENT_IMAGE=user/mytonprovider-agent:latest task agent:image:build"
-          exit 1
-        fi
-      - docker build -f agent/Dockerfile -t "${AGENT_IMAGE}" .
-
-  agent:image:push:
-    desc: Push prebuilt agent image (set AGENT_IMAGE)
-    cmds:
-      - |
-        if [ -z "${AGENT_IMAGE:-}" ]; then
-          echo "AGENT_IMAGE is required, e.g. AGENT_IMAGE=user/mytonprovider-agent:latest task agent:image:push"
-          exit 1
-        fi
-      - docker push "${AGENT_IMAGE}"
-
-  agent:image:build:push:
-    desc: Build and push agent image (set AGENT_IMAGE)
-    cmds:
-      - task: agent:image:build
-      - task: agent:image:push
-
-  coordinator:deploy:init:
+  deploy:init:
     desc: Prepare coordinator deploy env and secrets placeholders
     cmds:
-      - mkdir -p coordinator/deploy/secrets
+      - mkdir -p deploy/secrets
       - |
-        if [ ! -f coordinator/deploy/.env ]; then
-          cp coordinator/deploy/.env.example coordinator/deploy/.env
-          echo "Created coordinator/deploy/.env from .env.example"
+        if [ ! -f deploy/.env ]; then
+          cp deploy/.env.example deploy/.env
+          echo "Created deploy/.env from .env.example"
         else
-          echo "coordinator/deploy/.env already exists"
+          echo "deploy/.env already exists"
         fi
       - |
-        if [ ! -f coordinator/deploy/secrets/agents-ca.crt ]; then
-          echo "Place CA cert into coordinator/deploy/secrets/agents-ca.crt"
+        if [ ! -f deploy/secrets/agents-ca.crt ]; then
+          echo "Place CA cert into deploy/secrets/agents-ca.crt"
         fi
       - |
-        if [ ! -f coordinator/deploy/secrets/metrics.token ]; then
-          printf '%s\n' "metrics-token" > coordinator/deploy/secrets/metrics.token
-          echo "Created placeholder coordinator/deploy/secrets/metrics.token"
+        if [ ! -f deploy/secrets/metrics.token ]; then
+          printf '%s\n' "metrics-token" > deploy/secrets/metrics.token
+          echo "Created placeholder deploy/secrets/metrics.token"
         fi
 
-  coordinator:deploy:up:
+  deploy:up:
     desc: Build and start coordinator deploy stack
     cmds:
-      - docker compose --env-file coordinator/deploy/.env -f coordinator/deploy/docker-compose.yml up -d --build
+      - docker compose --env-file deploy/.env -f deploy/docker-compose.yml up -d --build
 
-  coordinator:deploy:down:
+  deploy:down:
     desc: Stop coordinator deploy stack
     cmds:
-      - docker compose --env-file coordinator/deploy/.env -f coordinator/deploy/docker-compose.yml down
+      - docker compose --env-file deploy/.env -f deploy/docker-compose.yml down
 
-  coordinator:deploy:ps:
+  deploy:ps:
     desc: Show coordinator deploy stack containers
     cmds:
-      - docker compose --env-file coordinator/deploy/.env -f coordinator/deploy/docker-compose.yml ps
+      - docker compose --env-file deploy/.env -f deploy/docker-compose.yml ps
 
-  coordinator:deploy:logs:
+  deploy:logs:
     desc: Follow logs for coordinator deploy stack
     cmds:
-      - docker compose --env-file coordinator/deploy/.env -f coordinator/deploy/docker-compose.yml logs -f
+      - docker compose --env-file deploy/.env -f deploy/docker-compose.yml logs -f
 
-  coordinator:deploy:frontend:
+  deploy:frontend:
     desc: Deploy frontend only (deps + nginx + build + static deploy)
     cmds:
       - |
@@ -514,71 +69,71 @@ tasks:
           echo "PUBLIC_ORIGIN is required, e.g. PUBLIC_ORIGIN=https://front.example.com"
           exit 1
         fi
-      - bash coordinator/deploy/deploy_frontend.sh
+      - bash deploy/deploy_frontend.sh
 
-  coordinator:hub:init:
-    desc: Prepare coordinator Docker Hub deploy env and secrets placeholders
+  hub:init:
+    desc: Prepare coordinator hub deploy env and secrets placeholders
     cmds:
-      - mkdir -p coordinator/deploy/secrets
+      - mkdir -p deploy/secrets
       - |
-        if [ ! -f coordinator/deploy/.env.hub ]; then
-          cp coordinator/deploy/.env.hub.example coordinator/deploy/.env.hub
-          echo "Created coordinator/deploy/.env.hub from .env.hub.example"
+        if [ ! -f deploy/.env.hub ]; then
+          cp deploy/.env.hub.example deploy/.env.hub
+          echo "Created deploy/.env.hub from .env.hub.example"
         else
-          echo "coordinator/deploy/.env.hub already exists"
+          echo "deploy/.env.hub already exists"
         fi
       - |
-        if [ ! -f coordinator/deploy/secrets/agents-ca.crt ]; then
-          echo "Place CA cert into coordinator/deploy/secrets/agents-ca.crt"
+        if [ ! -f deploy/secrets/agents-ca.crt ]; then
+          echo "Place CA cert into deploy/secrets/agents-ca.crt"
         fi
       - |
-        if [ ! -f coordinator/deploy/secrets/metrics.token ]; then
-          printf '%s\n' "metrics-token" > coordinator/deploy/secrets/metrics.token
-          echo "Created placeholder coordinator/deploy/secrets/metrics.token"
+        if [ ! -f deploy/secrets/metrics.token ]; then
+          printf '%s\n' "metrics-token" > deploy/secrets/metrics.token
+          echo "Created placeholder deploy/secrets/metrics.token"
         fi
 
-  coordinator:hub:up:
-    desc: Pull and start coordinator deploy stack from Docker Hub image (no local build)
+  hub:up:
+    desc: Pull and start coordinator deploy stack from registry image (no local build)
     cmds:
-      - docker compose --env-file coordinator/deploy/.env.hub -f coordinator/deploy/docker-compose.hub.yml up -d
+      - docker compose --env-file deploy/.env.hub -f deploy/docker-compose.hub.yml up -d
 
-  coordinator:hub:down:
-    desc: Stop Docker Hub coordinator deploy stack
+  hub:down:
+    desc: Stop hub coordinator deploy stack
     cmds:
-      - docker compose --env-file coordinator/deploy/.env.hub -f coordinator/deploy/docker-compose.hub.yml down
+      - docker compose --env-file deploy/.env.hub -f deploy/docker-compose.hub.yml down
 
-  coordinator:hub:ps:
-    desc: Show Docker Hub coordinator deploy stack containers
+  hub:ps:
+    desc: Show hub coordinator deploy stack containers
     cmds:
-      - docker compose --env-file coordinator/deploy/.env.hub -f coordinator/deploy/docker-compose.hub.yml ps
+      - docker compose --env-file deploy/.env.hub -f deploy/docker-compose.hub.yml ps
 
-  coordinator:hub:logs:
-    desc: Follow logs for Docker Hub coordinator deploy stack
+  hub:logs:
+    desc: Follow logs for hub coordinator deploy stack
     cmds:
-      - docker compose --env-file coordinator/deploy/.env.hub -f coordinator/deploy/docker-compose.hub.yml logs -f
+      - docker compose --env-file deploy/.env.hub -f deploy/docker-compose.hub.yml logs -f
 
-  coordinator:image:build:
+  image:build:
     desc: Build coordinator image locally (set COORDINATOR_IMAGE)
     cmds:
       - |
         if [ -z "${COORDINATOR_IMAGE:-}" ]; then
-          echo "COORDINATOR_IMAGE is required, e.g. COORDINATOR_IMAGE=user/mytonprovider-coordinator:latest task coordinator:image:build"
+          echo "COORDINATOR_IMAGE is required, e.g. COORDINATOR_IMAGE=ghcr.io/mytonprovider/mytonprovider-backend:<tag> task image:build"
           exit 1
         fi
-      - docker build -f coordinator/Dockerfile -t "${COORDINATOR_IMAGE}" .
+      - docker build --platform linux/amd64 -f Dockerfile -t "${COORDINATOR_IMAGE}" .
 
-  coordinator:image:push:
+  image:push:
     desc: Push prebuilt coordinator image (set COORDINATOR_IMAGE)
     cmds:
       - |
         if [ -z "${COORDINATOR_IMAGE:-}" ]; then
-          echo "COORDINATOR_IMAGE is required, e.g. COORDINATOR_IMAGE=user/mytonprovider-coordinator:latest task coordinator:image:push"
+          echo "COORDINATOR_IMAGE is required, e.g. COORDINATOR_IMAGE=ghcr.io/mytonprovider/mytonprovider-backend:<tag> task image:push"
           exit 1
         fi
       - docker push "${COORDINATOR_IMAGE}"
 
-  coordinator:image:build:push:
+  image:build:push:
     desc: Build and push coordinator image (set COORDINATOR_IMAGE)
     cmds:
-      - task: coordinator:image:build
-      - task: coordinator:image:push
+      - task: image:build
+      - task: image:push
