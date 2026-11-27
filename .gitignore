@@ -8,6 +8,8 @@
 /.DS_Store
 /.env.*
 *.env
+.env.hub*
+!.env.hub.example
 *mtpo-backend
 *.log
 *myapp
@@ -17,9 +19,9 @@
 *.csr
 certs/
 /cursor
+/tmp/
 
 # Legacy / accidental root binaries
-/cmd
 /dump-runchecks
 /providers.json
 /providers-90.txt

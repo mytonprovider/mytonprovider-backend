@@ -6,7 +6,7 @@
 **/*.log
 
 # Test artifacts / local reports
-coordinator/tmp/
+tmp/
 
 # Local env / secrets
 **/.env
