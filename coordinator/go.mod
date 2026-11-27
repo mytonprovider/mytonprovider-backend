@@ -5,13 +5,11 @@ go 1.26.2
 require (
 	github.com/gofiber/fiber/v2 v2.52.14
 	github.com/jackc/pgx/v5 v5.10.0
-	github.com/rudolfkova/mytonprovider-backend/contracts v0.0.0
+	github.com/mytonprovider/mytonprovider-agent/contracts v0.3.0
 	github.com/xssnick/tonutils-go v1.19.1
 	github.com/xssnick/tonutils-storage-provider v0.4.4
 	google.golang.org/grpc v1.83.0
 )
-
-replace github.com/rudolfkova/mytonprovider-backend/contracts => ../contracts
 
 require (
 	filippo.io/edwards25519 v1.2.0 // indirect
