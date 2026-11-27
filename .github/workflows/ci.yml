@@ -2,41 +2,64 @@ name: CI
 
 on:
   push:
-    branches: [main, master]
+    branches: [master, dev]
   pull_request:
-    branches: [main, master]
+    branches: [master, dev]
 
 jobs:
   check:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.26.x"
-          cache-dependency-path: |
-            agent/go.sum
-            coordinator/go.sum
-            contracts/go.sum
+          cache-dependency-path: go.sum
 
-      - name: Install protoc and Task
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y protobuf-compiler
-          go install github.com/go-task/task/v3/cmd/task@latest
-          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
-
-      - name: Verify generated proto
-        run: task proto:check
-
+      # clients/ifconfig and clients/ton tests call external services.
       - name: Unit tests
         run: |
-          go test ./coordinator/internal/workers/providersMaster/... -count=1
-          go test ./coordinator/internal/clients/ifconfig/... -count=1
+          go test -count=1 \
+            ./internal/pipelineevents/... \
+            ./internal/services/providers/... \
+            ./internal/utils/... \
+            ./internal/workers/providersMaster/...
 
-      - name: Build agent and coordinator
+      - name: Build coordinator
         run: |
-          go build -o /dev/null ./agent/cmd/agent
-          go build -o /dev/null ./coordinator/cmd
-          go build -o /dev/null ./coordinator/cmd/dump-runchecks
+          go build -o /dev/null ./cmd
+          go build -o /dev/null ./cmd/dump-runchecks
+
+      # On push to master the publish job builds the image.
+      - name: Build image
+        if: ${{ !(github.event_name == 'push' && github.ref == 'refs/heads/master') }}
+        run: docker build --platform linux/amd64 -t mytonprovider-backend:ci .
+
+  publish:
+    needs: check
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set image
+        run: echo "IMAGE=ghcr.io/${{ github.repository }}:${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        run: |
+          docker build --platform linux/amd64 -t "$IMAGE" .
+          docker push "$IMAGE"

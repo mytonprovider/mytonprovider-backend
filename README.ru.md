@@ -6,12 +6,7 @@ Backend для [mytonprovider.org](https://mytonprovider.org) — монитор
 
 ## Архитектура
 
-Два Go-сервиса и общие protobuf-контракты в `contracts/`:
-
-| Компонент | Назначение |
-|-----------|------------|
-| **coordinator** | HTTP API для фронтенда, Postgres, фоновые воркеры (жизненный цикл провайдеров, телеметрия, очистка), вызов проверок по gRPC к агентам |
-| **agent** | gRPC (`RunChecks`, `RunStorageRates`), ADNL к провайдерам, опционально Prometheus и push в Loki |
+Coordinator отдаёт HTTP API для фронтенда, хранит данные в Postgres, ведёт фоновые воркеры (жизненный цикл провайдеров, телеметрия, очистка) и вызывает проверки по gRPC у агентов. Агент вместе с protobuf-контрактами лежит в [mytonprovider-agent](https://github.com/mytonprovider/mytonprovider-agent).
 
 ```mermaid
 flowchart LR
@@ -24,36 +19,16 @@ flowchart LR
 ## Структура репозитория
 
 ```
-├── agent/              # gRPC-агент проверок
-├── coordinator/        # API, воркеры, db/init.sql
-├── contracts/          # proto и сгенерированный Go
-├── observability/      # локальный Prometheus + Grafana + Loki (dev)
-├── Taskfile.yml        # proto, тесты, деплой
-└── go.work
+├── cmd/                # точка входа coordinator, dump-runchecks
+├── internal/           # API, воркеры, клиенты, репозитории
+├── db/                 # init.sql и миграции
+├── deploy/             # Docker Compose для VPS
+└── Taskfile.yml        # дамп, деплой
 ```
 
 ## Разработка
 
-**Нужно:** Go 1.26+ ([go.work](go.work)), [Task](https://taskfile.dev), `grpcurl`, `openssl`, `protoc` (для `task proto:gen`).
-
-```bash
-# Перегенерация protobuf (после правок contracts/proto)
-task proto:gen
-task proto:check
-
-# Локальный агент с тестовым TLS и токеном
-task agent:run:test
-```
-
-В другом терминале — gRPC smoke (агент уже должен быть запущен):
-
-```bash
-task agent:test:smoke
-```
-
-Живые проверки с реальными данными TON: [agent/tests/grpc/README.md](agent/tests/grpc/README.md) · [RU](agent/tests/grpc/README.ru.md).
-
-**TLS для продакшн-агентов:** [agent/README.md](agent/README.md) · [RU](agent/README.ru.md)
+**Нужно:** Go 1.26+, [Task](https://taskfile.dev).
 
 ### VS Code
 
@@ -68,55 +43,63 @@ task agent:test:smoke
       "type": "go",
       "request": "launch",
       "mode": "auto",
-      "program": "${workspaceFolder}/coordinator/cmd",
+      "program": "${workspaceFolder}/cmd",
       "buildFlags": "-tags=debug"
-    },
-    {
-      "name": "Agent",
-      "type": "go",
-      "request": "launch",
-      "mode": "auto",
-      "program": "${workspaceFolder}/agent/cmd/agent"
     }
   ]
 }
 ```
 
-Переменные `env` задайте по `coordinator/deploy/.env.example` или по тестовым значениям из `Taskfile.yml` (`task agent:run:test`).
+Переменные `env` задайте по `deploy/.env.example`.
+
+### Дамп RunChecks
+
+`dump-runchecks` собирает запрос `RunChecks` настоящей логикой coordinator и пишет его в JSON. Этот файл берут задачи replay агента — см. [mytonprovider-agent](https://github.com/mytonprovider/mytonprovider-agent).
+
+```bash
+task dump:runchecks
+```
+
+Пишет `tmp/runchecks-live.json` и `tmp/runchecks-live-meta.json` (гео по storage IP); `tmp/` в gitignore.
+
+По умолчанию `dump-runchecks` с **`--storage=memory`**: in-process fake DB (без Postgres). Нужна сеть до TON (и `MASTER_ADDRESS` / `TON_CONFIG_URL`, если дефолтов мало):
+
+```bash
+export MASTER_ADDRESS=<your-master-wallet>
+task dump:runchecks
+```
+
+Чтение из Postgres (`DB_*` как у coordinator):
+
+```bash
+go run ./cmd/dump-runchecks --storage=postgres --limit 1 --out tmp/runchecks-live.json
+```
+
+`task dump:runchecks:with-storage-rates` дополнительно пишет `tmp/runchecks-live-storage-rates.json` для `RunStorageRates` (pubkeys из RunChecks payload, тот же порядок). Вручную:
+
+```bash
+go run ./cmd/dump-runchecks --limit 50 --out tmp/runchecks-live.json --also-dump-storage-rates
+```
+
+Флаги: `--storage-rates-out`, `--rates-job-id`, `--rates-query-timeout-ms`, `--rates-total-ms`, `--rates-query-size` (см. `go run ./cmd/dump-runchecks -help`).
 
 ## Docker-деплой (VPS)
 
-**Полный порядок (coordinator → агенты → TLS):** [coordinator/deploy/README.ru.md](coordinator/deploy/README.ru.md) (чеклист в начале), TLS — [agent/README.ru.md](agent/README.ru.md).
+**Полный порядок (coordinator → агенты → TLS):** [deploy/README.ru.md](deploy/README.ru.md) (чеклист в начале), TLS — [mytonprovider-agent](https://github.com/mytonprovider/mytonprovider-agent).
 
-| Стек | Документация | Заметка |
-|------|----------------|---------|
-| Agent (+ опционально мониторинг) | [EN](agent/deploy/README.md) · [RU](agent/deploy/README.ru.md) | **VPS: лучше Docker Hub** — сборка образа локально, pull на сервере |
-| Coordinator (+ Postgres + мониторинг) | [EN](coordinator/deploy/README.md) · [RU](coordinator/deploy/README.ru.md) | **VPS: лучше Docker Hub** — сборка образа локально, pull на сервере |
-
-**Агент на VPS (рекомендуется):** сборка и push на dev-машине, затем hub — см. [agent/deploy/README.ru.md](agent/deploy/README.ru.md).
+Образ публикует задание `publish` в `CI` после проверок при каждом push в `master`: `ghcr.io/mytonprovider/mytonprovider-backend:<tag>`, тег — первые 7 символов коммита. Ручной `task image:build:push` остаётся запасным путём.
 
 ```bash
-# Dev-машина
-AGENT_IMAGE=<user>/mytonprovider-agent:latest task agent:image:build:push
 # VPS
-task agent:hub:init && nano agent/deploy/.env.hub && task agent:hub:stack:up
+task hub:init && nano deploy/.env.hub && task hub:up
 ```
 
-**Coordinator — быстрый старт** (сборка на VPS, dev/отладка):
+**Быстрый старт** (сборка на VPS, dev/отладка):
 
 ```bash
-task coordinator:deploy:init
-nano coordinator/deploy/.env
-task coordinator:deploy:up
-```
-
-**Coordinator на VPS (рекомендуется):** сборка и push на dev-машине, затем hub:
-
-```bash
-# Dev-машина
-COORDINATOR_IMAGE=<user>/mytonprovider-coordinator:latest task coordinator:image:build:push
-# VPS
-task coordinator:hub:init && nano coordinator/deploy/.env.hub && task coordinator:hub:up
+task deploy:init
+nano deploy/.env
+task deploy:up
 ```
 
 **Отдельный деплой фронтенда** (когда coordinator уже запущен):
@@ -128,12 +111,12 @@ task coordinator:hub:init && nano coordinator/deploy/.env.hub && task coordinato
 # Опционально:
 # - INSTALL_SSL=true (только для домена), COORDINATOR_PORT=8080
 # По IP (без SSL):
-DOMAIN=45.129.96.190 PUBLIC_ORIGIN=http://45.129.96.190 INSTALL_SSL=false task coordinator:deploy:frontend
+DOMAIN=203.0.113.1 PUBLIC_ORIGIN=http://203.0.113.1 INSTALL_SSL=false task deploy:frontend
 # По домену:
-DOMAIN=mytonprovider.org PUBLIC_ORIGIN=https://mytonprovider.org INSTALL_SSL=true task coordinator:deploy:frontend
+DOMAIN=mytonprovider.org PUBLIC_ORIGIN=https://mytonprovider.org INSTALL_SSL=true task deploy:frontend
 ```
 
-Эта task-команда запускает `coordinator/deploy/deploy_frontend.sh`: ставит зависимости, настраивает Nginx, собирает статику фронта и проксирует (`/api`, `/health`, `/metrics`) на coordinator.
+Эта task-команда запускает `deploy/deploy_frontend.sh`: ставит зависимости, настраивает Nginx, собирает статику фронта и проксирует (`/api`, `/health`, `/metrics`) на coordinator.
 
 Быстрые проверки после деплоя фронта:
 
@@ -142,18 +125,6 @@ curl -fsS "http://127.0.0.1:8080/health"
 curl -fsS "http://127.0.0.1:8080/api/v1/providers/filters"
 curl -fsS "http://127.0.0.1/"
 ```
-
-**Агент со сборкой на VPS** (только dev / отладка):
-
-```bash
-task agent:deploy:init
-nano agent/deploy/.env
-task agent:deploy:up
-```
-
-## Локальная observability
-
-Prometheus + Grafana + Loki для разработки: [EN](observability/prometheus-grafana/README.md) · [RU](observability/prometheus-grafana/README.ru.md).
 
 ## API и воркеры coordinator
 
